@@ -29,8 +29,8 @@
     <div class="flex items-center justify-between mb-3">
       <h1 class="text-2xl font-black text-gray-900">🏆 ภารกิจ</h1>
       <div class="flex items-center gap-1 bg-yellow-50 border border-yellow-200 rounded-full px-3 py-1">
-        <span class="text-base">🪙</span>
-        <span id="myWallet" class="font-black text-yellow-600 text-sm">0</span>
+        <span class="text-base">⭐</span>
+        <span id="myPoints" class="font-black text-yellow-600 text-sm">0</span>
         <span class="text-xs opacity-75">แต้ม</span>
       </div>
     </div>
@@ -63,7 +63,7 @@
         </div>
         <div class="text-right">
           <p class="text-xs text-gray-400">แต้มสะสม</p>
-          <p id="myWalletRank" class="font-black text-yellow-600">0 🪙</p>
+          <p id="myPointsRank" class="font-black text-yellow-600">0 ⭐</p>
         </div>
       </div>
       <div id="leaderboardList"><p class="text-center text-gray-300 py-10 font-bold">กำลังโหลด...</p></div>
@@ -159,11 +159,11 @@
     return `${y}-${m}-${d}`;
   }
 
-  // ── Wallet realtime ────────────────────────────────────────
+  // ── Points realtime ────────────────────────────────────────
   onSnapshot(doc(db,'users',uid), snap => {
-    const wallet = snap.data()?.wallet || 0;
-    document.getElementById('myWallet').textContent = wallet.toLocaleString();
-    document.getElementById('myWalletRank').textContent = wallet.toLocaleString() + ' 🪙';
+    const points = snap.data()?.points || 0;
+    document.getElementById('myPoints').textContent = points.toLocaleString();
+    document.getElementById('myPointsRank').textContent = points.toLocaleString() + ' ⭐';
   });
 
   // ── Tabs ───────────────────────────────────────────────────
@@ -291,41 +291,39 @@
     await runTransaction(db, async (transaction) => {
       const userRef = doc(db,'users',uid);
       const userSnap = await transaction.get(userRef);
-      const currentWallet = userSnap.data()?.wallet || 0;
-      transaction.update(userRef, { wallet: currentWallet + points });
+      const currentPoints = userSnap.data()?.points || 0;
+      transaction.update(userRef, { points: currentPoints + points });
       const txRef = doc(collection(db,'transactions'));
       transaction.set(txRef, {
         uid, type: 'earn', amount: points,
         reason: `mission_${missionId}`, missionId,
         missionTitle: mission.title,
         timestamp: new Date().toISOString(),
-        balance: currentWallet + points
+        balance: currentPoints + points
       });
     });
     loadMissions();
   };
 
-  // ── Leaderboard — Top 9 + อันดับผู้ใช้ ───────────────────
+  // ── Leaderboard ────────────────────────────────────────────
   async function loadLeaderboard() {
     document.getElementById('leaderboardList').innerHTML = '<p class="text-center text-gray-300 py-10 font-bold">กำลังโหลด...</p>';
     try {
-      // ดึง top 9
       const q9 = query(
         collection(db,'leaderboard'),
         where('week','==',week),
         orderBy('points','desc'),
         limit(9)
       );
-      // ดึงทั้งหมดเพื่อหาอันดับจริงของ user
       const qAll = query(
         collection(db,'leaderboard'),
         where('week','==',week),
         orderBy('points','desc')
       );
       const [snap9, snapAll] = await Promise.all([getDocs(q9), getDocs(qAll)]);
-      const top9    = snap9.docs.map(d=>({id:d.id,...d.data()}));
+      const top9     = snap9.docs.map(d=>({id:d.id,...d.data()}));
       const allUsers = snapAll.docs.map(d=>({id:d.id,...d.data()}));
-      const myRank  = allUsers.findIndex(e => e.uid === uid) + 1;
+      const myRank   = allUsers.findIndex(e => e.uid === uid) + 1;
       document.getElementById('myRank').textContent = myRank ? `# ${myRank}` : '# –';
       renderLeaderboard(top9, myRank, allUsers.length);
     } catch(err) {
@@ -351,11 +349,10 @@
         <div class="flex-1 min-w-0">
           <p class="font-black text-gray-800 text-sm truncate">${e.displayName||'ผู้ใช้'}${isMe?' (คุณ)':''}</p>
         </div>
-        <p class="font-black text-yellow-600 flex-shrink-0">🪙 ${(e.wallet||0).toLocaleString()}</p>
+        <p class="font-black text-yellow-600 flex-shrink-0">⭐ ${(e.points||0).toLocaleString()}</p>
       </div>`;
     }).join('');
 
-    // แสดงอันดับ user ถ้าไม่ได้อยู่ใน top 9
     if (myRank > 9) {
       html += `<div class="flex items-center gap-2 py-2 px-3"><div class="flex-1 border-t border-dashed border-gray-200"></div><span class="text-xs text-gray-300 flex-shrink-0 px-2">···</span><div class="flex-1 border-t border-dashed border-gray-200"></div></div>`;
       html += `<div class="fade-in flex items-center gap-3 bg-amber-50 border border-amber-300 rounded-2xl p-3 shadow-sm">
@@ -382,7 +379,7 @@
           <div class="w-full aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-5xl mb-3">${r.image || '🎁'}</div>
           <h4 class="font-black text-gray-800 text-xs mb-1 leading-tight">${r.title}</h4>
           <p class="text-[10px] text-gray-400 mb-3">${r.description || ''}</p>
-          <button onclick="openShippingModal('${r.id}','${r.title}',${r.points})" class="w-full bg-gradient-to-r from-amber-400 to-orange-500 text-white font-black py-2.5 rounded-xl text-xs shadow active:scale-95 transition">แลก ${(r.points || 0).toLocaleString()} 🪙</button>
+          <button onclick="openShippingModal('${r.id}','${r.title}',${r.points})" class="w-full bg-gradient-to-r from-amber-400 to-orange-500 text-white font-black py-2.5 rounded-xl text-xs shadow active:scale-95 transition">แลก ${(r.points || 0).toLocaleString()} ⭐</button>
         </div>`).join('')
       : `<div class="col-span-2 text-center text-gray-300 py-6 border-2 border-dashed border-gray-200 rounded-3xl font-bold">ยังไม่มีของรางวัลในระบบ</div>`;
   }
@@ -398,15 +395,15 @@
       ? entries.map(e => `<div class="fade-in bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm">
           <span class="text-2xl">🎁</span>
           <div class="flex-1 min-w-0"><p class="font-bold text-gray-800 text-sm truncate">${e.title || e.rewardTitle}</p><p class="text-xs text-gray-400">${new Date(e.redeemedAt).toLocaleString('th-TH',{dateStyle:'short',timeStyle:'short'})}</p></div>
-          <div class="text-right flex-shrink-0"><p class="text-xs font-black text-red-400">-${e.cost || e.pointsCost} 🪙</p><p class="text-[10px] font-bold ${sC[e.status] || 'text-gray-400'}">${sL[e.status] || e.status}</p></div>
+          <div class="text-right flex-shrink-0"><p class="text-xs font-black text-red-400">-${e.cost || e.pointsCost} ⭐</p><p class="text-[10px] font-bold ${sC[e.status] || 'text-gray-400'}">${sL[e.status] || e.status}</p></div>
         </div>`).join('')
       : `<p class="text-center text-gray-300 py-6 font-bold text-sm">ยังไม่มีประวัติการแลก</p>`;
   }
 
   // ── Shipping Modal ─────────────────────────────────────────
   window.openShippingModal = async (rewardId, title, cost) => {
-    const w = (await getDoc(doc(db, 'users', uid))).data()?.wallet || 0;
-    if (w < cost) return alert(`แต้มไม่พอ (มี ${w} แต้ม ต้องการ ${cost} แต้ม)`);
+    const pts = (await getDoc(doc(db, 'users', uid))).data()?.points || 0;
+    if (pts < cost) return alert(`แต้มไม่พอ (มี ${pts} แต้ม ต้องการ ${cost} แต้ม)`);
     currentRedeem = { rewardId, title, cost };
     document.getElementById('shippingModal').classList.remove('hidden');
   };
@@ -432,8 +429,8 @@
       await runTransaction(db, async (tx) => {
         const uRef  = doc(db, 'users', uid);
         const uSnap = await tx.get(uRef);
-        const w = uSnap.data()?.wallet || 0;
-        if (w < currentRedeem.cost) throw new Error('NOT_ENOUGH');
+        const pts = uSnap.data()?.points || 0;
+        if (pts < currentRedeem.cost) throw new Error('NOT_ENOUGH');
         tx.set(doc(collection(db, 'redemptions')), {
           uid, rewardId: currentRedeem.rewardId, rewardTitle: currentRedeem.title,
           pointsCost: currentRedeem.cost, status: 'pending',
@@ -443,9 +440,9 @@
         tx.set(doc(collection(db, 'transactions')), {
           uid, type: 'spend', amount: currentRedeem.cost,
           reason: `redeem_${currentRedeem.rewardId}`, rewardTitle: currentRedeem.title,
-          timestamp: new Date().toISOString(), balance: w - currentRedeem.cost
+          timestamp: new Date().toISOString(), balance: pts - currentRedeem.cost
         });
-        tx.update(uRef, { wallet: w - currentRedeem.cost });
+        tx.update(uRef, { points: pts - currentRedeem.cost });
       });
       closeShippingModal();
       alert('🎉 แลกของรางวัลสำเร็จ!');
