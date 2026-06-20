@@ -175,7 +175,7 @@
     }
 
     const { saveSession } = await import('./lib/auth.js');
-    const { collection, doc, getDoc, getDocs, query, setDoc, where } =
+    const { collection, doc, getDoc, getDocs, query, setDoc, where, runTransaction } =
       await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
 
     const params = new URLSearchParams(window.location.search);
@@ -185,6 +185,17 @@
 
     let lineProfile = null;
     let firebaseAuth = null;
+
+    // ── FIX #1: ป้องกัน liff.init() ถูกเรียกซ้ำ ──
+    // LIFF SDK จะ throw error ถ้า init() ถูกเรียกซ้ำสอง instance
+    // เก็บ promise ของการ init ไว้ใช้ร่วมกันทุกจุดที่ต้องใช้ liff
+    let liffInitPromise = null;
+    function ensureLiffInit() {
+      if (!liffInitPromise) {
+        liffInitPromise = liff.init({ liffId: LIFF_IDS.login });
+      }
+      return liffInitPromise;
+    }
 
     function showMsg(text, ok = false) {
       const el = document.getElementById('msgBox');
@@ -304,6 +315,11 @@
       } catch (err) {
         showMsg('ตรวจสอบข้อมูลไม่สำเร็จ: ' + err.message);
         setStatus('เกิดข้อผิดพลาด');
+        // ── FIX #3: ให้ผู้ใช้กดลองใหม่ได้แทนที่จะค้างหน้าจอ ──
+        document.getElementById('statusView').classList.add('hidden');
+        document.getElementById('btnLineLogin').classList.remove('hidden');
+        document.getElementById('btnLineLogin').disabled = false;
+        document.getElementById('btnLineLogin').textContent = 'ลองเข้าสู่ระบบอีกครั้ง';
       }
     }
 
@@ -311,7 +327,7 @@
       try {
         if (!window.liff) throw new Error('LINE LIFF SDK ไม่สามารถโหลดได้');
         setStatus('กำลังเชื่อมต่อ LINE...');
-        await liff.init({ liffId: LIFF_IDS.login });
+        await ensureLiffInit();
         if (!liff.isLoggedIn()) {
           if (liff.isInClient()) {
             liff.login({ redirectUri: window.location.href });
@@ -325,7 +341,10 @@
         const profile = await liff.getProfile();
         await continueWithLineProfile(profile);
       } catch (err) {
+        document.getElementById('statusView').classList.add('hidden');
         document.getElementById('btnLineLogin').classList.remove('hidden');
+        document.getElementById('btnLineLogin').disabled = false;
+        document.getElementById('btnLineLogin').textContent = 'เข้าสู่ระบบด้วย LINE';
         setStatus('ไม่สามารถเชื่อมต่อ LINE ได้');
         showMsg(err.message || 'เข้าสู่ระบบไม่สำเร็จ');
       }
@@ -335,7 +354,9 @@
       const btn = document.getElementById('btnLineLogin');
       btn.disabled = true; btn.textContent = 'กำลังเชื่อมต่อ...';
       try {
-        await liff.init({ liffId: LIFF_IDS.login });
+        // ── FIX #1 (ต่อ): ใช้ ensureLiffInit() แทนการเรียก liff.init() ตรงๆ ──
+        // ถ้า startLineLogin() init ไปแล้ว จะได้ promise เดิม ไม่ init ซ้ำ
+        await ensureLiffInit();
         liff.login({ redirectUri: window.location.href });
       } catch (err) {
         showMsg(err.message);
@@ -345,23 +366,33 @@
 
     // ✅──────────────────────────────────────────────────────────
     // ปุ่มสร้างบัญชี — แก้ syntax Firebase v10 modular
+    // + FIX #2: ป้องกัน Anonymous Auth สร้างบัญชีซ้ำ
+    // + FIX #4: validate วันเกิดไม่ให้เป็นอนาคต
+    // + FIX #5: trim เบอร์โทรก่อน validate
     // ✅──────────────────────────────────────────────────────────
+    let isRegistering = false; // กันกดซ้ำ/double-submit
+
     document.getElementById('btnRegister').addEventListener('click', async () => {
+      if (isRegistering) return; // ── FIX #2a: กันกดซ้ำตั้งแต่ทางเข้า ──
       if (!lineProfile?.userId) return showMsg('ข้อมูล LINE หาย กรุณาลองใหม่');
 
       const displayName = document.getElementById('regName').value.trim() || lineProfile.displayName || 'LINE User';
-      const phone = document.getElementById('regPhone').value.trim();
+      const phone = document.getElementById('regPhone').value.trim(); // FIX #5
       const birthDate = document.getElementById('regBirthDate').value;
       const initialWeight = parseFloat(document.getElementById('regWeight').value) || null;
       const initialHeight = parseFloat(document.getElementById('regHeight').value) || null;
       const email = document.getElementById('regEmail').value.trim();
 
       if (!displayName) return showMsg('กรุณาระบุชื่อ-นามสกุล');
-      if (!/^0[0-9]{9}$/.test(phone)) return showMsg('เบอร์โทรไม่ถูกต้อง (ต้องเป็น 0 ตามด้วยตัวเลข 9 ตัว)');
+      if (!/^0[0-9]{9}$/.test(phone)) return showMsg('เบอร์โทรไม่ถูกต้อง (ต้องเป็น 0 ตามด้วยตัวเลข 9 ตัว ไม่มีช่องว่างหรือขีด)');
       if (!birthDate) return showMsg('กรุณาเลือกวันเดือนปีเกิด');
+      // ── FIX #4: validate วันเกิดไม่ให้เป็นวันที่ในอนาคต ──
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (birthDate > todayStr) return showMsg('วันเดือนปีเกิดต้องไม่เกินวันนี้');
       if (!initialWeight || initialWeight < 20) return showMsg('กรุณาระบุน้ำหนักที่ถูกต้อง');
       if (!initialHeight || initialHeight < 50) return showMsg('กรุณาระบุส่วนสูงที่ถูกต้อง');
 
+      isRegistering = true; // ── FIX #2a ──
       const btn = document.getElementById('btnRegister');
       btn.disabled = true; btn.textContent = 'กำลังสร้างบัญชี...';
 
@@ -369,18 +400,35 @@
       const now = new Date().toISOString();
 
       try {
+        // ── FIX #2b: เช็คอีกครั้งก่อนสมัครจริงว่ามีบัญชีนี้แล้วหรือยัง ──
+        // (กันเคส race condition / กดสมัครค้างไว้นานแล้วมีคนอื่น/แท็บอื่นสมัครไปก่อน)
+        const existing = await findUserByLineId(lineUserId);
+        if (existing) {
+          saveLineSession(existing.id, existing.data, lineProfile);
+          window.location.href = redirect;
+          return;
+        }
+
         // ── Step 1: โหลด Firebase Auth ──
         const { getAuth, signInAnonymously } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
         if (!firebaseAuth) {
           firebaseAuth = getAuth();
         }
 
-        // ── Step 2: Anonymous Sign-in (✅ แก้: ใช้ฟังก์ชันอิสระ ไม่ใช่ method) ──
+        // ── FIX #2c: ใช้ anonymous user ที่มีอยู่แล้วถ้ามี แทนที่จะสร้างใหม่ทุกครั้ง ──
+        // เดิม: เรียก signInAnonymously() ทุกครั้งที่กดสมัคร -> ได้ uid ใหม่เสมอ
+        // ถ้ากดซ้ำ/รีเฟรชกลางทาง จะมี anonymous user หลายตัวกำพร้าใน Firebase Auth
+        // และเสี่ยงสร้าง user doc ซ้ำผูกกับ lineUid เดียวกัน
         let firebaseUid;
         try {
-          const cred = await signInAnonymously(firebaseAuth);
-          firebaseUid = cred.user.uid;
-          console.log('✅ Anonymous auth OK, UID:', firebaseUid);
+          if (firebaseAuth.currentUser) {
+            firebaseUid = firebaseAuth.currentUser.uid;
+            console.log('ℹ️ ใช้ anonymous user เดิม, UID:', firebaseUid);
+          } else {
+            const cred = await signInAnonymously(firebaseAuth);
+            firebaseUid = cred.user.uid;
+            console.log('✅ Anonymous auth OK, UID:', firebaseUid);
+          }
         } catch (authErr) {
           console.error('❌ Anonymous auth failed:', authErr.code, authErr.message);
           if (authErr.code === 'auth/operation-not-allowed') {
@@ -392,7 +440,7 @@
           throw new Error('การยืนยันตัวตนล้มเหลว: ' + authErr.message);
         }
 
-        // ── Step 3: เขียนข้อมูล — ใช้ Firebase UID เป็น document ID ──
+        // ── Step 2: เขียนข้อมูล — ใช้ Firebase UID เป็น document ID ──
         const userRef = doc(db, 'users', firebaseUid);
         const userData = {
           uid: firebaseUid,
@@ -411,10 +459,20 @@
           updatedAt: now,
         };
 
-        await setDoc(userRef, userData, { merge: true });
+        // ── FIX #2d: ใช้ transaction กัน race condition ตอนเขียนเอกสารจริง ──
+        // ถ้าระหว่างนี้มีอีกแท็บ/อุปกรณ์เขียน user doc เดียวกัน(เช่น uid เดิมจาก
+        // persisted anonymous session) ไปก่อนแล้ว จะไม่เขียนทับข้อมูลเดิมโดยไม่ตั้งใจ
+        await runTransaction(db, async (tx) => {
+          const snap = await tx.get(userRef);
+          if (snap.exists()) {
+            tx.set(userRef, { ...userData, createdAt: snap.data().createdAt || now }, { merge: true });
+          } else {
+            tx.set(userRef, userData);
+          }
+        });
         console.log('✅ User doc written:', firebaseUid);
 
-        // ── Step 4: บันทึก session แล้ว redirect ──
+        // ── Step 3: บันทึก session แล้ว redirect ──
         saveLineSession(firebaseUid, userData, lineProfile);
         window.location.href = redirect;
 
@@ -422,6 +480,7 @@
         console.error('❌ Registration error:', err);
         showMsg('สร้างบัญชีไม่สำเร็จ: ' + err.message);
         btn.disabled = false; btn.textContent = 'สร้างบัญชี';
+        isRegistering = false; // ── FIX #2a: ปลดล็อกให้กดใหม่ได้เมื่อ error ──
       }
     });
 
