@@ -140,14 +140,13 @@
         เข้าสู่ระบบด้วย LINE
       </button>
 
-      <div id="msgBox" class="hidden mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl text-2xs sm:text-sm text-center font-semibold"></div>
+      <div id="msgBox" class="hidden mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl text-2xs sm:text-sm text-center font-semibold break-words"></div>
     </div>
 
     <p class="text-center text-white/30 text-2xs sm:text-xs mt-4 sm:mt-6 pb-2">VitalVibe for LINE Web App</p>
   </div>
 
   <script type="module">
-    // ── URL ตรวจสอบ ──
     const pathname = window.location.pathname;
     if (!pathname.endsWith('login.html') && !pathname.endsWith('/') && window.location.hostname !== 'localhost') {
       const params = new URLSearchParams(window.location.search);
@@ -179,21 +178,13 @@
     const { collection, doc, getDoc, getDocs, query, setDoc, where } =
       await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
 
-    // ✅ Import Firebase Auth ตั้งแต่ต้น — ไม่รอถึงตอนสมัคร
-    let firebaseAuth;
-    try {
-      const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
-      firebaseAuth = getAuth();
-    } catch (e) {
-      console.warn('Firebase Auth module not loaded yet, will retry on register.');
-    }
-
     const params = new URLSearchParams(window.location.search);
     const requestedRedirect = params.get('redirect') || '/pages/food.html';
     const redirect = (requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//'))
       ? requestedRedirect : '/pages/food.html';
 
     let lineProfile = null;
+    let firebaseAuth = null;
 
     function showMsg(text, ok = false) {
       const el = document.getElementById('msgBox');
@@ -255,10 +246,10 @@
 
     function saveLineSession(firebaseUid, userData, profile) {
       saveSession({
-        uid: firebaseUid,                                          // ✅ Firebase UID
+        uid: firebaseUid,
         displayName: userData.displayName || profile.displayName || 'LINE User',
         avatar: userData.avatar || profile.pictureUrl || '',
-        lineUid: profile.userId,                                    // LINE UID (สำหรับอ้างอิง)
+        lineUid: profile.userId,
         phone: userData.phone || '',
         birthDate: userData.birthDate || '',
         initialWeight: userData.initialWeight || null,
@@ -266,10 +257,6 @@
       });
     }
 
-    /**
-     * ✅ ค้นหา user ด้วย LINE UID — ค้นผ่าน field เท่านั้น
-     *    เพราะ document ID ตอนนี้เป็น Firebase UID ไม่ใช่ LINE UID
-     */
     async function findUserByLineId(lineUserId) {
       if (!lineUserId) return null;
       try {
@@ -312,7 +299,6 @@
           showRegister(profile);
           return;
         }
-        // ✅ user.id = Firebase UID (document ID) — ใช้ตัวนี้เป็น uid หลัก
         saveLineSession(user.id, user.data, profile);
         window.location.href = redirect;
       } catch (err) {
@@ -358,7 +344,7 @@
     });
 
     // ✅──────────────────────────────────────────────────────────
-    // ปุ่มสร้างบัญชี — แก้ไขหลัก: ใช้ Firebase UID เป็น document ID
+    // ปุ่มสร้างบัญชี — แก้ syntax Firebase v10 modular
     // ✅──────────────────────────────────────────────────────────
     document.getElementById('btnRegister').addEventListener('click', async () => {
       if (!lineProfile?.userId) return showMsg('ข้อมูล LINE หาย กรุณาลองใหม่');
@@ -383,37 +369,34 @@
       const now = new Date().toISOString();
 
       try {
-        // ── Step 1: โหลด Firebase Auth (ถ้ายังไม่โหลด) ──
+        // ── Step 1: โหลด Firebase Auth ──
+        const { getAuth, signInAnonymously } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
         if (!firebaseAuth) {
-          const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
           firebaseAuth = getAuth();
         }
 
-        // ── Step 2: Anonymous Sign-in ──
+        // ── Step 2: Anonymous Sign-in (✅ แก้: ใช้ฟังก์ชันอิสระ ไม่ใช่ method) ──
         let firebaseUid;
         try {
-          const cred = await firebaseAuth.signInAnonymously(firebaseAuth);
+          const cred = await signInAnonymously(firebaseAuth);
           firebaseUid = cred.user.uid;
           console.log('✅ Anonymous auth OK, UID:', firebaseUid);
         } catch (authErr) {
           console.error('❌ Anonymous auth failed:', authErr.code, authErr.message);
-
-          // แจ้ง error ที่เข้าใจง่ายสำหรับแต่ละสาเหตุ
           if (authErr.code === 'auth/operation-not-allowed') {
             throw new Error('Anonymous Login ยังไม่เปิด — เปิดที่ Firebase Console → Authentication → Sign-in method → Anonymous');
           }
           if (authErr.code === 'auth/network-request-failed') {
-            throw new Error('ไม่มีอินเทอร์เน็ต กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง');
+            throw new Error('ไม่มีอินเทอร์เน็ต กรุณาเชื่อมต่อแล้วลองอีกครั้ง');
           }
           throw new Error('การยืนยันตัวตนล้มเหลว: ' + authErr.message);
         }
 
         // ── Step 3: เขียนข้อมูล — ใช้ Firebase UID เป็น document ID ──
         const userRef = doc(db, 'users', firebaseUid);
-
         const userData = {
-          uid: firebaseUid,            // ✅ เก็บ Firebase UID
-          lineUid: lineUserId,         // ✅ เก็บ LINE UID ใน field
+          uid: firebaseUid,
+          lineUid: lineUserId,
           displayName,
           phone,
           birthDate,
