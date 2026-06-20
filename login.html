@@ -7,13 +7,26 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontSize: { '2xs': ['0.625rem', { lineHeight: '0.875rem' }] } } }
+    }
+  </script>
   <style>
     * { font-family: 'Prompt', sans-serif; -webkit-tap-highlight-color: transparent; }
     body { background: #0d1117; }
-    html, body { height: 100%; height: 100dvh; }
+    html { height: 100%; }
+    body {
+      height: 100dvh;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+    }
     .card-glass {
       background: rgba(255,255,255,0.05);
       backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255,255,255,0.1);
     }
     .btn-primary {
@@ -27,122 +40,120 @@
     .float-up { animation: floatUp .5s ease-out forwards; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { animation: spin .8s linear infinite; }
-    /* ฟอร์มลงทะเบียนยาว → ให้ scroll ภายในการ์ด */
-    .register-scroll { max-height: none; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    .register-scroll {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      max-height: min(55dvh, 480px);
+    }
     .register-scroll::-webkit-scrollbar { display: none; }
     .register-scroll { -ms-overflow-style: none; scrollbar-width: none; }
-    /* ซ่อนลูกศรของ date input บน dark bg */
-    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+    @supports (-webkit-touch-callout: none) {
+      input[type="text"], input[type="tel"], input[type="email"], input[type="number"], input[type="date"] {
+        font-size: 16px !important;
+      }
+    }
+    .login-container { width: 100%; max-width: 28rem; }
+    @media (min-width: 640px) { .login-container { max-width: 30rem; } }
+    @media (min-width: 1024px) { .login-container { max-width: 32rem; } }
   </style>
 </head>
-<body class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+<body class="flex items-center justify-center relative overflow-hidden">
 
   <div class="absolute inset-0 overflow-hidden pointer-events-none">
-    <div class="absolute -top-40 -left-40 w-96 h-96 rounded-full opacity-20" style="background:radial-gradient(circle,#06c755,transparent)"></div>
-    <div class="absolute -bottom-40 -right-40 w-96 h-96 rounded-full opacity-20" style="background:radial-gradient(circle,#14b8a6,transparent)"></div>
+    <div class="absolute w-60 h-60 sm:w-80 sm:h-80 lg:w-96 lg:h-96 -top-20 sm:-top-32 lg:-top-40 -left-20 sm:-left-32 lg:-left-40 rounded-full opacity-20"
+         style="background:radial-gradient(circle,#06c755,transparent)"></div>
+    <div class="absolute w-60 h-60 sm:w-80 sm:h-80 lg:w-96 lg:h-96 -bottom-20 sm:-bottom-32 lg:-bottom-40 -right-20 sm:-right-32 lg:-right-40 rounded-full opacity-20"
+         style="background:radial-gradient(circle,#14b8a6,transparent)"></div>
   </div>
 
-  <div class="w-full max-w-sm float-up">
-    <div class="text-center mb-6">
-      <div id="avatarPreview" class="w-20 h-20 mx-auto rounded-3xl flex items-center justify-center text-4xl mb-3 shadow-2xl overflow-hidden"
+  <div class="login-container float-up px-4 sm:px-6">
+    <div class="text-center mb-4 sm:mb-6">
+      <div id="avatarPreview"
+           class="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-2xl sm:rounded-3xl flex items-center justify-center text-2xl sm:text-4xl mb-2 sm:mb-3 shadow-2xl overflow-hidden"
            style="background:linear-gradient(135deg,#06c755,#14b8a6)">VV</div>
-      <h1 class="text-3xl font-black text-white tracking-tight">VitalVibe</h1>
-      <p id="subtitle" class="text-sm text-emerald-400 font-semibold mt-1">Login with LINE</p>
+      <h1 class="text-2xl sm:text-3xl font-black text-white tracking-tight">VitalVibe</h1>
+      <p id="subtitle" class="text-xs sm:text-sm text-emerald-400 font-semibold mt-1">Login with LINE</p>
     </div>
 
-    <div class="card-glass rounded-3xl p-6">
+    <div class="card-glass rounded-2xl sm:rounded-3xl p-4 sm:p-6">
 
-      <!-- สถานะโหลด -->
       <div id="statusView">
-        <div class="text-center py-4">
-          <div class="w-12 h-12 border-4 border-white/20 border-t-emerald-400 rounded-full spinner mx-auto mb-4"></div>
-          <p id="statusText" class="text-white font-bold text-sm">กำลังเชื่อมต่อ LINE...</p>
-          <p class="text-white/40 text-xs mt-2">กรุณาเปิดหน้านี้ภายในแอป LINE</p>
+        <div class="text-center py-6 sm:py-8">
+          <div class="w-10 h-10 sm:w-12 sm:h-12 border-4 border-white/20 border-t-emerald-400 rounded-full spinner mx-auto mb-3 sm:mb-4"></div>
+          <p id="statusText" class="text-white font-bold text-xs sm:text-sm">กำลังเชื่อมต่อ LINE...</p>
+          <p class="text-white/40 text-2xs sm:text-xs mt-2">กรุณาเปิดหน้านี้ภายในแอป LINE</p>
         </div>
       </div>
 
-      <!-- ✅ ฟอร์มลงทะเบียน — เพิ่มฟิลด์ใหม่ -->
-      <div id="registerView" class="hidden flex flex-col max-h-[calc(100vh-280px)]">
-        <div class="mb-4 flex-shrink-0">
-          <h2 class="text-white font-black text-xl">📝 ลงทะเบียน</h2>
-          <p class="text-white/45 text-xs mt-1">กรอกข้อมูลเพื่อเริ่มใช้งาน VitalVibe</p>
+      <div id="registerView" class="hidden flex flex-col">
+        <div class="mb-3 sm:mb-4 flex-shrink-0">
+          <h2 class="text-white font-black text-lg sm:text-xl">📝 ลงทะเบียน</h2>
+          <p class="text-white/45 text-2xs sm:text-xs mt-1">กรอกข้อมูลเพื่อเริ่มใช้งาน VitalVibe</p>
         </div>
-        <div class="register-scroll space-y-3 pr-1 flex-1 overflow-y-auto">
-          <!-- ชื่อ-นามสกุล -->
+        <div class="register-scroll space-y-2.5 sm:space-y-3 pr-1 flex-1">
           <div>
-            <label class="text-xs text-white/45 font-bold">ชื่อ - นามสกุล <span class="text-emerald-400">*</span></label>
+            <label class="text-2xs sm:text-xs text-white/45 font-bold">ชื่อ - นามสกุล <span class="text-emerald-400">*</span></label>
             <input id="regName" type="text" placeholder="เช่น สมชาย ใจดี"
-              class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder-white/40 text-sm transition-colors">
+              class="mt-1 w-full bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-white placeholder-white/40 text-sm transition-colors">
           </div>
-
-          <!-- เบอร์โทรศัพท์ -->
           <div>
-            <label class="text-xs text-white/45 font-bold">เบอร์โทรศัพท์ <span class="text-emerald-400">*</span></label>
-            <input id="regPhone" type="tel" placeholder="0812345678" maxlength="10"
-              class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder-white/40 text-sm transition-colors">
+            <label class="text-2xs sm:text-xs text-white/45 font-bold">เบอร์โทรศัพท์ <span class="text-emerald-400">*</span></label>
+            <input id="regPhone" type="tel" placeholder="0812345678" maxlength="10" inputmode="numeric"
+              class="mt-1 w-full bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-white placeholder-white/40 text-sm transition-colors">
           </div>
-
-          <!-- วันเดือนปีเกิด -->
           <div>
-            <label class="text-xs text-white/45 font-bold">วันเดือนปีเกิด <span class="text-emerald-400">*</span></label>
+            <label class="text-2xs sm:text-xs text-white/45 font-bold">วันเดือนปีเกิด <span class="text-emerald-400">*</span></label>
             <input id="regBirthDate" type="date"
-              class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder-white/40 text-sm transition-colors">
-            <p id="birthDateHint" class="text-[10px] text-white/30 mt-1">เลือกวันเกิด (จะแสดงเป็น พ.ศ. อัตโนมัติ)</p>
+              class="mt-1 w-full bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-white placeholder-white/40 text-sm transition-colors">
+            <p id="birthDateHint" class="text-2xs sm:text-[10px] text-white/30 mt-1">เลือกวันเกิด (จะแสดงเป็น พ.ศ. อัตโนมัติ)</p>
           </div>
-
-          <!-- น้ำหนัก & ส่วนสูง -->
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid gap-2.5 sm:gap-3" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr))">
             <div>
-              <label class="text-xs text-white/45 font-bold">น้ำหนัก (kg) <span class="text-emerald-400">*</span></label>
-              <input id="regWeight" type="number" placeholder="65" step="0.1" min="20" max="300"
-                class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder-white/40 text-sm transition-colors">
+              <label class="text-2xs sm:text-xs text-white/45 font-bold">น้ำหนัก (kg) <span class="text-emerald-400">*</span></label>
+              <input id="regWeight" type="number" placeholder="65" step="0.1" min="20" max="300" inputmode="decimal"
+                class="mt-1 w-full bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-white placeholder-white/40 text-sm transition-colors">
             </div>
             <div>
-              <label class="text-xs text-white/45 font-bold">ส่วนสูง (cm) <span class="text-emerald-400">*</span></label>
-              <input id="regHeight" type="number" placeholder="170" step="0.1" min="50" max="250"
-                class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder-white/40 text-sm transition-colors">
+              <label class="text-2xs sm:text-xs text-white/45 font-bold">ส่วนสูง (cm) <span class="text-emerald-400">*</span></label>
+              <input id="regHeight" type="number" placeholder="170" step="0.1" min="50" max="250" inputmode="decimal"
+                class="mt-1 w-full bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-white placeholder-white/40 text-sm transition-colors">
             </div>
           </div>
-
-          <!-- อีเมล (optional) -->
           <div>
-            <label class="text-xs text-white/45 font-bold">อีเมล (ไม่จำเป็น)</label>
-            <input id="regEmail" type="email" placeholder="name@example.com"
-              class="mt-1 w-full bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-white placeholder-white/40 text-sm transition-colors">
+            <label class="text-2xs sm:text-xs text-white/45 font-bold">อีเมล (ไม่จำเป็น)</label>
+            <input id="regEmail" type="email" placeholder="name@example.com" inputmode="email"
+              class="mt-1 w-full bg-white/10 border border-white/20 rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-white placeholder-white/40 text-sm transition-colors">
           </div>
-
-          <!-- ✅ แสดง BMI แบบ real-time -->
-          <div id="bmiPreview" class="hidden p-3 rounded-2xl bg-white/10 text-center">
-            <p class="text-white/60 text-xs">BMI ของคุณ</p>
-            <p id="bmiValue" class="text-2xl font-black text-emerald-400 mt-1">–</p>
-            <p id="bmiLabel" class="text-xs text-white/50 mt-0.5">–</p>
+          <div id="bmiPreview" class="hidden p-3 rounded-xl sm:rounded-2xl bg-white/10 text-center">
+            <p class="text-white/60 text-2xs sm:text-xs">BMI ของคุณ</p>
+            <p id="bmiValue" class="text-xl sm:text-2xl font-black text-emerald-400 mt-1">–</p>
+            <p id="bmiLabel" class="text-2xs sm:text-xs text-white/50 mt-0.5">–</p>
           </div>
         </div>
-
-        <button id="btnRegister" class="btn-primary w-full mt-4 py-3.5 rounded-2xl text-white font-black text-sm shadow-lg flex-shrink-0">
+        <button id="btnRegister" class="btn-primary w-full mt-3 sm:mt-4 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-white font-black text-xs sm:text-sm shadow-lg flex-shrink-0">
           สร้างบัญชี
         </button>
       </div>
 
-      <button id="btnLineLogin" class="hidden btn-primary w-full py-3.5 rounded-2xl text-white font-black text-sm shadow-lg">
+      <button id="btnLineLogin" class="hidden btn-primary w-full py-3 sm:py-3.5 rounded-xl sm:rounded-2xl text-white font-black text-xs sm:text-sm shadow-lg">
         เข้าสู่ระบบด้วย LINE
       </button>
 
-      <div id="msgBox" class="hidden mt-4 p-3 rounded-2xl text-sm text-center font-semibold"></div>
+      <div id="msgBox" class="hidden mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl text-2xs sm:text-sm text-center font-semibold"></div>
     </div>
 
-    <p class="text-center text-white/30 text-xs mt-6">VitalVibe for LINE Web App</p>
+    <p class="text-center text-white/30 text-2xs sm:text-xs mt-4 sm:mt-6 pb-2">VitalVibe for LINE Web App</p>
   </div>
 
   <script type="module">
     // ── URL ตรวจสอบ ──
-    // Only redirect if pathname doesn't end with login.html (for safety on non-localhost)
     const pathname = window.location.pathname;
     if (!pathname.endsWith('login.html') && !pathname.endsWith('/') && window.location.hostname !== 'localhost') {
       const params = new URLSearchParams(window.location.search);
-      const redirect = params.get('redirect') || '';
-      const correctUrl = redirect
-        ? `/login.html?redirect=${encodeURIComponent(redirect)}`
+      const redirectParam = params.get('redirect') || '';
+      const correctUrl = redirectParam
+        ? `/login.html?redirect=${encodeURIComponent(redirectParam)}`
         : '/login.html';
       window.location.replace(correctUrl);
       throw new Error('Redirecting');
@@ -168,6 +179,15 @@
     const { collection, doc, getDoc, getDocs, query, setDoc, where } =
       await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
 
+    // ✅ Import Firebase Auth ตั้งแต่ต้น — ไม่รอถึงตอนสมัคร
+    let firebaseAuth;
+    try {
+      const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
+      firebaseAuth = getAuth();
+    } catch (e) {
+      console.warn('Firebase Auth module not loaded yet, will retry on register.');
+    }
+
     const params = new URLSearchParams(window.location.search);
     const requestedRedirect = params.get('redirect') || '/pages/food.html';
     const redirect = (requestedRedirect.startsWith('/') && !requestedRedirect.startsWith('//'))
@@ -178,7 +198,7 @@
     function showMsg(text, ok = false) {
       const el = document.getElementById('msgBox');
       el.textContent = text;
-      el.className = `mt-4 p-3 rounded-2xl text-sm text-center font-semibold ${ok ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`;
+      el.className = `mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl text-2xs sm:text-sm text-center font-semibold break-words ${ok ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'}`;
       el.classList.remove('hidden');
     }
 
@@ -187,18 +207,16 @@
     function renderProfile(p) {
       document.getElementById('subtitle').textContent = p.displayName || 'LINE user';
       if (p.pictureUrl) {
-        document.getElementById('avatarPreview').innerHTML = `<img src="${p.pictureUrl}" class="w-full h-full object-cover" alt="">`;
+        document.getElementById('avatarPreview').innerHTML = `<img src="${p.pictureUrl}" class="w-full h-full object-cover" alt="" loading="lazy">`;
       }
     }
 
-    // ✅ แปลง ค.ศ. → พ.ศ.
     function toBE(ceStr) {
       if (!ceStr) return null;
       const p = ceStr.split('-');
       return `${parseInt(p[0]) + 543}-${p[1]}-${p[2]}`;
     }
 
-    // ✅ แสดง hint วันที่เป็น พ.ศ. เมื่อเลือก date
     document.getElementById('regBirthDate').addEventListener('change', (e) => {
       const hint = document.getElementById('birthDateHint');
       if (e.target.value) {
@@ -212,7 +230,6 @@
       }
     });
 
-    // ✅ คำนวณ BMI real-time ตอนกรอกน้ำหนัก/ส่วนสูง
     function updateBMIPreview() {
       const w = parseFloat(document.getElementById('regWeight').value);
       const h = parseFloat(document.getElementById('regHeight').value);
@@ -236,13 +253,12 @@
     document.getElementById('regWeight').addEventListener('input', updateBMIPreview);
     document.getElementById('regHeight').addEventListener('input', updateBMIPreview);
 
-    // ✅ บันทึก session พร้อมข้อมูลใหม่
-    function saveLineSession(userId, userData, profile) {
+    function saveLineSession(firebaseUid, userData, profile) {
       saveSession({
-        uid: userId,
+        uid: firebaseUid,                                          // ✅ Firebase UID
         displayName: userData.displayName || profile.displayName || 'LINE User',
         avatar: userData.avatar || profile.pictureUrl || '',
-        lineUid: profile.userId,
+        lineUid: profile.userId,                                    // LINE UID (สำหรับอ้างอิง)
         phone: userData.phone || '',
         birthDate: userData.birthDate || '',
         initialWeight: userData.initialWeight || null,
@@ -250,16 +266,21 @@
       });
     }
 
+    /**
+     * ✅ ค้นหา user ด้วย LINE UID — ค้นผ่าน field เท่านั้น
+     *    เพราะ document ID ตอนนี้เป็น Firebase UID ไม่ใช่ LINE UID
+     */
     async function findUserByLineId(lineUserId) {
       if (!lineUserId) return null;
       try {
-        const d = await getDoc(doc(db, 'users', lineUserId));
-        if (d.exists()) return { id: d.id, data: d.data() };
-      } catch (e) { console.warn('⚠️ doc ID lookup failed:', e.message); }
-      try {
         const s = await getDocs(query(collection(db, 'users'), where('lineUid', '==', lineUserId)));
-        if (!s.empty) { const f = s.docs[0]; return { id: f.id, data: f.data() }; }
-      } catch (e) { console.warn('⚠️ field lookup failed:', e.message); }
+        if (!s.empty) {
+          const f = s.docs[0];
+          return { id: f.id, data: f.data() };
+        }
+      } catch (e) {
+        console.warn('⚠️ findUserByLineId failed:', e.message);
+      }
       return null;
     }
 
@@ -267,13 +288,17 @@
       document.getElementById('statusView').classList.add('hidden');
       document.getElementById('registerView').classList.remove('hidden');
       document.getElementById('regName').value = profile.displayName || '';
-      // ตั้ง max date เป็นวันนี้
       const today = new Date();
       const y = today.getFullYear();
       const m = String(today.getMonth() + 1).padStart(2, '0');
       const d = String(today.getDate()).padStart(2, '0');
       document.getElementById('regBirthDate').setAttribute('max', `${y}-${m}-${d}`);
       showMsg('กรุณากรอกข้อมูลเพื่อลงทะเบียน', true);
+      requestAnimationFrame(() => {
+        const nameVal = document.getElementById('regName').value.trim();
+        const target = nameVal ? document.getElementById('regPhone') : document.getElementById('regName');
+        target.focus();
+      });
     }
 
     async function continueWithLineProfile(profile) {
@@ -282,10 +307,18 @@
       setStatus('กำลังตรวจสอบการลงทะเบียน...');
       try {
         const user = await findUserByLineId(profile.userId);
-        if (!user) { lineProfile = profile; showRegister(profile); return; }
+        if (!user) {
+          lineProfile = profile;
+          showRegister(profile);
+          return;
+        }
+        // ✅ user.id = Firebase UID (document ID) — ใช้ตัวนี้เป็น uid หลัก
         saveLineSession(user.id, user.data, profile);
         window.location.href = redirect;
-      } catch (err) { showMsg('ตรวจสอบข้อมูลไม่สำเร็จ: ' + err.message); setStatus('เกิดข้อผิดพลาด'); }
+      } catch (err) {
+        showMsg('ตรวจสอบข้อมูลไม่สำเร็จ: ' + err.message);
+        setStatus('เกิดข้อผิดพลาด');
+      }
     }
 
     async function startLineLogin() {
@@ -294,8 +327,13 @@
         setStatus('กำลังเชื่อมต่อ LINE...');
         await liff.init({ liffId: LIFF_IDS.login });
         if (!liff.isLoggedIn()) {
-          if (liff.isInClient()) { liff.login({ redirectUri: window.location.href }); }
-          else { document.getElementById('statusView').classList.add('hidden'); document.getElementById('btnLineLogin').classList.remove('hidden'); setStatus('กรุณากดปุ่มด้านล่าง'); }
+          if (liff.isInClient()) {
+            liff.login({ redirectUri: window.location.href });
+          } else {
+            document.getElementById('statusView').classList.add('hidden');
+            document.getElementById('btnLineLogin').classList.remove('hidden');
+            setStatus('กรุณากดปุ่มด้านล่าง');
+          }
           return;
         }
         const profile = await liff.getProfile();
@@ -310,22 +348,28 @@
     document.getElementById('btnLineLogin').addEventListener('click', async () => {
       const btn = document.getElementById('btnLineLogin');
       btn.disabled = true; btn.textContent = 'กำลังเชื่อมต่อ...';
-      try { await liff.init({ liffId: LIFF_IDS.login }); liff.login({ redirectUri: window.location.href }); }
-      catch (err) { showMsg(err.message); btn.disabled = false; btn.textContent = 'เข้าสู่ระบบด้วย LINE'; }
+      try {
+        await liff.init({ liffId: LIFF_IDS.login });
+        liff.login({ redirectUri: window.location.href });
+      } catch (err) {
+        showMsg(err.message);
+        btn.disabled = false; btn.textContent = 'เข้าสู่ระบบด้วย LINE';
+      }
     });
 
-    // ✅ ปุ่มสร้างบัญชี — validate ฟิลด์ใหม่ + บันทึก
+    // ✅──────────────────────────────────────────────────────────
+    // ปุ่มสร้างบัญชี — แก้ไขหลัก: ใช้ Firebase UID เป็น document ID
+    // ✅──────────────────────────────────────────────────────────
     document.getElementById('btnRegister').addEventListener('click', async () => {
       if (!lineProfile?.userId) return showMsg('ข้อมูล LINE หาย กรุณาลองใหม่');
 
       const displayName = document.getElementById('regName').value.trim() || lineProfile.displayName || 'LINE User';
       const phone = document.getElementById('regPhone').value.trim();
-      const birthDate = document.getElementById('regBirthDate').value; // เก็บเป็น ค.ศ.
+      const birthDate = document.getElementById('regBirthDate').value;
       const initialWeight = parseFloat(document.getElementById('regWeight').value) || null;
       const initialHeight = parseFloat(document.getElementById('regHeight').value) || null;
       const email = document.getElementById('regEmail').value.trim();
 
-      // ✅ validate ฟิลด์ที่จำเป็น
       if (!displayName) return showMsg('กรุณาระบุชื่อ-นามสกุล');
       if (!/^0[0-9]{9}$/.test(phone)) return showMsg('เบอร์โทรไม่ถูกต้อง (ต้องเป็น 0 ตามด้วยตัวเลข 9 ตัว)');
       if (!birthDate) return showMsg('กรุณาเลือกวันเดือนปีเกิด');
@@ -335,35 +379,44 @@
       const btn = document.getElementById('btnRegister');
       btn.disabled = true; btn.textContent = 'กำลังสร้างบัญชี...';
 
-      const userId = lineProfile.userId;
-      const userRef = doc(db, 'users', userId);
+      const lineUserId = lineProfile.userId;
       const now = new Date().toISOString();
 
       try {
-        // ✅ Authenticate with Firebase using custom token or anonymous auth
-        // Since we're using LINE UID as document ID, we need to sign in anonymously
-        // then write with proper permissions
-        const { getAuth: getFirebaseAuth, signInAnonymously: firebaseSignInAnonymously } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
-        const firebaseAuth = getFirebaseAuth();
-        
-        // Try to sign in as this user (using LINE UID as custom user ID)
-        try {
-          // If already authenticated as this user, skip
-          if (firebaseAuth.currentUser?.uid !== userId) {
-            // Sign in anonymously first, then update profile
-            await firebaseSignInAnonymously(firebaseAuth);
-          }
-        } catch (authErr) {
-          console.warn('Auth issue (may be expected):', authErr.message);
+        // ── Step 1: โหลด Firebase Auth (ถ้ายังไม่โหลด) ──
+        if (!firebaseAuth) {
+          const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
+          firebaseAuth = getAuth();
         }
 
-        // ✅ Write user data - Firestore will use the LINE UID as document ID
-        await setDoc(userRef, {
-          uid: userId,
-          lineUid: userId,
+        // ── Step 2: Anonymous Sign-in ──
+        let firebaseUid;
+        try {
+          const cred = await firebaseAuth.signInAnonymously(firebaseAuth);
+          firebaseUid = cred.user.uid;
+          console.log('✅ Anonymous auth OK, UID:', firebaseUid);
+        } catch (authErr) {
+          console.error('❌ Anonymous auth failed:', authErr.code, authErr.message);
+
+          // แจ้ง error ที่เข้าใจง่ายสำหรับแต่ละสาเหตุ
+          if (authErr.code === 'auth/operation-not-allowed') {
+            throw new Error('Anonymous Login ยังไม่เปิด — เปิดที่ Firebase Console → Authentication → Sign-in method → Anonymous');
+          }
+          if (authErr.code === 'auth/network-request-failed') {
+            throw new Error('ไม่มีอินเทอร์เน็ต กรุณาเชื่อมต่ออินเทอร์เน็ตแล้วลองอีกครั้ง');
+          }
+          throw new Error('การยืนยันตัวตนล้มเหลว: ' + authErr.message);
+        }
+
+        // ── Step 3: เขียนข้อมูล — ใช้ Firebase UID เป็น document ID ──
+        const userRef = doc(db, 'users', firebaseUid);
+
+        const userData = {
+          uid: firebaseUid,            // ✅ เก็บ Firebase UID
+          lineUid: lineUserId,         // ✅ เก็บ LINE UID ใน field
           displayName,
           phone,
-          birthDate,            // เก็บเป็น ค.ศ. YYYY-MM-DD
+          birthDate,
           initialWeight,
           initialHeight,
           email: email || '',
@@ -373,12 +426,17 @@
           calorieGoal: 2000,
           createdAt: now,
           updatedAt: now,
-        }, { merge: true });
+        };
 
-        saveLineSession(userId, { displayName, phone, birthDate, initialWeight, initialHeight, email, avatar: lineProfile.pictureUrl || '' }, lineProfile);
+        await setDoc(userRef, userData, { merge: true });
+        console.log('✅ User doc written:', firebaseUid);
+
+        // ── Step 4: บันทึก session แล้ว redirect ──
+        saveLineSession(firebaseUid, userData, lineProfile);
         window.location.href = redirect;
+
       } catch (err) {
-        console.error('Registration error:', err);
+        console.error('❌ Registration error:', err);
         showMsg('สร้างบัญชีไม่สำเร็จ: ' + err.message);
         btn.disabled = false; btn.textContent = 'สร้างบัญชี';
       }
