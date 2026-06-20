@@ -133,7 +133,7 @@ vercel
 # - Want to override settings? N
 ```
 
-ได้ URL เช่น `https://vitalvibe.vercel.app`
+ได้ URL เช่น `https://ncds-nrru.vercel.app`
 
 ### 5. ตั้งค่า LINE LIFF
 

@@ -135,15 +135,15 @@
   </div>
 
   <script type="module">
-    // ── URL ตรวจสอบ (เหมือนเวอร์ชันก่อนหน้า) ──
-    const CORRECT_LOGIN_URL = 'login.html';
-    const currentUrl = window.location.origin + window.location.pathname;
-    if (currentUrl !== CORRECT_LOGIN_URL && window.location.hostname !== 'localhost') {
+    // ── URL ตรวจสอบ ──
+    // Only redirect if pathname doesn't end with login.html (for safety on non-localhost)
+    const pathname = window.location.pathname;
+    if (!pathname.endsWith('login.html') && !pathname.endsWith('/') && window.location.hostname !== 'localhost') {
       const params = new URLSearchParams(window.location.search);
       const redirect = params.get('redirect') || '';
       const correctUrl = redirect
-        ? `${CORRECT_LOGIN_URL}?redirect=${encodeURIComponent(redirect)}`
-        : CORRECT_LOGIN_URL;
+        ? `/login.html?redirect=${encodeURIComponent(redirect)}`
+        : '/login.html';
       window.location.replace(correctUrl);
       throw new Error('Redirecting');
     }
