@@ -17,10 +17,28 @@
     .analyzing{animation:pulse 1s ease-in-out infinite}
     html, body { height: 100%; height: 100dvh; width: 100%; }
     body { margin: 0; padding: 0; }
+    @keyframes spin{to{transform:rotate(360deg)}} .spinner{animation:spin .8s linear infinite}
   </style>
 </head>
 <body class="h-screen w-screen overflow-hidden">
-<div id="app" class="h-full w-full max-w-md mx-auto bg-white shadow-2xl relative flex flex-col">
+
+<!-- ── Loading Overlay ── -->
+<div id="loadingOverlay" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
+  <div class="w-10 h-10 border-4 border-teal-100 border-t-teal-500 rounded-full spinner mb-3"></div>
+  <p class="text-gray-400 font-bold text-sm" id="loadingText">กำลังตรวจสอบสิทธิ์...</p>
+</div>
+
+<!-- ── Auth Error View ── -->
+<div id="authErrorView" class="hidden fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center p-6">
+  <p class="text-5xl mb-4">🔒</p>
+  <p class="text-gray-700 font-black text-lg text-center mb-2">กรุณาเข้าสู่ระบบใหม่</p>
+  <p class="text-gray-400 text-sm text-center mb-6" id="authErrorReason"></p>
+  <button onclick="location.href='/login.html'" class="bg-teal-500 text-white font-black px-8 py-3 rounded-2xl text-sm active:scale-95 transition">
+    เข้าสู่ระบบ
+  </button>
+</div>
+
+<div id="app" class="hidden h-full w-full max-w-md mx-auto bg-white shadow-2xl relative flex flex-col">
 
   <!-- Header -->
   <div class="flex-shrink-0 pt-12 pb-4 px-5 bg-white border-b border-gray-100">
@@ -55,8 +73,6 @@
 
   <!-- Scroll area -->
   <div class="flex-1 overflow-y-auto hide-scrollbar px-5 pt-5 pb-4" id="scrollArea">
-
-    <!-- ✅ ปุ่มเดียว — เต็มจอ โดดเด่น -->
     <button onclick="openCamera()"
       class="w-full flex items-center gap-4 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-3xl p-5 text-white shadow-lg active:scale-[0.98] transition mb-6">
       <div class="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center text-4xl flex-shrink-0">📷</div>
@@ -66,13 +82,10 @@
       </div>
       <span class="text-2xl opacity-50 flex-shrink-0">›</span>
     </button>
-
-    <!-- Meal sections -->
     <div id="mealSections" class="space-y-4"></div>
-
   </div>
 
-  <!-- Responsive nav -->
+  <!-- Nav -->
   <nav class="flex-shrink-0 w-full bg-white/95 backdrop-blur border-t border-gray-100 flex items-center justify-around pb-safe z-50 shadow-2xl" style="min-height:calc(3.5rem + max(0.5rem, env(safe-area-inset-bottom, 0px)))">
     <a href="food.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-teal-500 flex-1 justify-center"><span class="text-xl">🍱</span><span class="text-[10px] font-bold">อาหาร</span></a>
     <a href="reminders.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-gray-400 flex-1 justify-center"><span class="text-xl">⏰</span><span class="text-[10px] font-bold">เตือน</span></a>
@@ -88,9 +101,7 @@
       <button onclick="closeCameraModal()" class="text-white/70 hover:text-white text-xl">✕</button>
       <h2 class="text-white font-black text-lg flex-1 text-center">ถ่ายหรืออัปโหลดรูปอาหาร</h2>
     </div>
-
     <div class="flex-1 overflow-y-auto hide-scrollbar">
-      <!-- Upload zone -->
       <div id="uploadZone" class="m-4 border-2 border-dashed border-teal-300 rounded-2xl p-6 text-center cursor-pointer"
            onclick="document.getElementById('fileInput').click()">
         <span class="text-5xl">📷</span>
@@ -98,8 +109,6 @@
       </div>
       <img id="previewImg" class="hidden w-full max-h-64 object-contain px-4" />
       <input id="fileInput" type="file" accept="image/*" capture="environment" class="hidden" onchange="onFileSelected(event)">
-
-      <!-- Meal type -->
       <div class="px-4 pb-2">
         <p class="text-xs text-gray-500 font-bold mb-2">มื้ออาหาร</p>
         <div class="flex gap-2">
@@ -109,11 +118,7 @@
           <button data-meal="ว่าง"    onclick="selectMeal(this)" class="meal-btn flex-1 py-2 rounded-xl text-xs font-bold border-2 border-gray-200 text-gray-500">🍎 ว่าง</button>
         </div>
       </div>
-
-      <!-- Status -->
       <div id="analyzeStatus" class="hidden px-4 py-3 mx-4 mb-2 rounded-2xl bg-teal-50 text-teal-700 text-sm font-semibold text-center"></div>
-
-      <!-- Result -->
       <div id="analyzeResult" class="hidden px-4 pb-2 space-y-2">
         <div class="bg-gray-50 rounded-2xl p-3">
           <p class="text-xs text-gray-400 font-bold mb-1">ชื่ออาหาร (แก้ไขได้)</p>
@@ -156,8 +161,6 @@
         <p id="foodNote" class="text-xs text-gray-400 italic px-1"></p>
       </div>
     </div>
-
-    <!-- ปุ่มด้านล่าง modal -->
     <div class="p-4 flex gap-2 flex-shrink-0 pb-safe">
       <button id="analyzeBtn" onclick="analyzeFood()" disabled
         class="flex-1 bg-gradient-to-r from-teal-400 to-emerald-500 text-white font-black py-3 rounded-2xl text-sm disabled:opacity-40 transition active:scale-95">
@@ -190,17 +193,94 @@
 </div>
 
 <script type="module">
-  import { requireAuth } from '../lib/auth.js';
+  // ──────────────────────────────────────────────────────────
+  // 📦 Imports
+  // ──────────────────────────────────────────────────────────
+  import { requireAuth, clearSession } from '../lib/auth.js';
   import { db } from '../lib/firebase.js';
+  import { getAuth } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
   import {
-    collection, addDoc, query, where, onSnapshot, deleteDoc, doc, updateDoc, getDocs, getDoc, setDoc
+    collection, addDoc, query, where,
+    onSnapshot, deleteDoc, doc, updateDoc,
+    getDocs, getDoc, setDoc
   } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
 
+  // ──────────────────────────────────────────────────────────
+  // 🔐 Step 1: ตรวจสอบ Auth + UID Match
+  // ──────────────────────────────────────────────────────────
+  const loadingText = document.getElementById('loadingText');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const authErrorView = document.getElementById('authErrorView');
+  const authErrorReason = document.getElementById('authErrorReason');
+  const appEl = document.getElementById('app');
+
+  function showAuthError(reason) {
+    loadingOverlay.classList.add('hidden');
+    authErrorReason.textContent = reason;
+    authErrorView.classList.remove('hidden');
+  }
+
+  function showApp() {
+    loadingOverlay.classList.add('hidden');
+    appEl.classList.remove('hidden');
+  }
+
+  // อ่าน session
   const session = requireAuth();
-  if (!session) await new Promise(() => {});
 
-  const uid = session.uid;
+  if (!session || !session.uid) {
+    showAuthError('ไม่พบข้อมูล session กรุณาเข้าสู่ระบบใหม่');
+    throw new Error('No session');
+  }
 
+  const sessionUid = session.uid;
+
+  // รอ Firebase Auth พร้อมใช้งาน
+  const auth = getAuth();
+  let firebaseUid = null;
+
+  try {
+    // ถ้า auth ยังไม่พร้อม รอสักครู่
+    if (!auth.currentUser) {
+      loadingText.textContent = 'กำลังรอการยืนยันตัวตน...';
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Auth timeout')), 8000);
+        const unsub = auth.onAuthStateChanged((user) => {
+          clearTimeout(timeout);
+          unsub();
+          resolve(user);
+        });
+      });
+    }
+    firebaseUid = auth.currentUser?.uid;
+  } catch (err) {
+    console.warn('⚠️ Auth state wait failed:', err.message);
+    firebaseUid = auth.currentUser?.uid;
+  }
+
+  // ── 🔑 ตรวจ UID match ──
+  if (!firebaseUid) {
+    console.error('❌ Firebase Auth ไม่มี user แต่มี session');
+    if (typeof clearSession === 'function') clearSession();
+    showAuthError('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+    throw new Error('No Firebase Auth user');
+  }
+
+  if (firebaseUid !== sessionUid) {
+    console.error('❌ UID MISMATCH!', { sessionUid, firebaseUid });
+    if (typeof clearSession === 'function') clearSession();
+    showAuthError(`ข้อมูล session ไม่ตรงกัน (ต้องล็อกอินใหม่)`);
+    throw new Error(`UID mismatch: session=${sessionUid} auth=${firebaseUid}`);
+  }
+
+  // ✅ ผ่านทั้งหมด — ใช้ uid ต่อไปได้
+  const uid = firebaseUid;
+  console.log('✅ Auth OK, UID:', uid);
+  showApp();
+
+  // ──────────────────────────────────────────────────────────
+  // 📦 State
+  // ──────────────────────────────────────────────────────────
   const av = session.avatar || '';
   const avatarEl = document.getElementById('userAvatar');
   if (av.startsWith('http') || av.startsWith('data:')) {
@@ -216,93 +296,169 @@
   let lineUserId = session.lineUid || null;
   let latestTodayEntries = [];
   let historyEntries = [];
+  let calorieNotifiedToday = false; // กันส่ง notification ซ้ำ
 
+  // ──────────────────────────────────────────────────────────
+  // 📅 Helpers
+  // ──────────────────────────────────────────────────────────
+  function formatLocalDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const today = formatLocalDate(new Date());
+
+  // ──────────────────────────────────────────────────────────
+  // 👤 User profile listener (อ่าน calorieGoal + lineUserId)
+  // ──────────────────────────────────────────────────────────
   onSnapshot(doc(db, 'users', uid), snap => {
     const profile = snap.data() || {};
     calorieGoal = Number(profile.calorieGoal) || 2000;
     lineUserId = profile.lineUserId || profile.lineUid || session.lineUid || null;
     document.getElementById('calorieGoal').textContent = `${calorieGoal.toLocaleString()} kcal`;
     updateSummary(latestTodayEntries);
-  }, err => console.error('User profile listener failed:', err));
+  }, err => {
+    console.warn('⚠️ User profile listener error (non-critical):', err.message);
+  });
 
-  const today = formatLocalDate(new Date());
-  
-  // เพิ่ม guard ก่อน onSnapshot
-  if (!uid) {
+  // ──────────────────────────────────────────────────────────
+  // 🍱 Food logs listener — วันนี้
+  // ──────────────────────────────────────────────────────────
+  const foodQuery = query(
+    collection(db, 'foodLogs'),
+    where('uid', '==', uid),
+    where('date', '==', today)
+  );
+
+  onSnapshot(foodQuery, snap => {
+    const entries = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    latestTodayEntries = entries;
+    renderMeals(entries);
+    updateSummary(entries);
+  }, err => {
+    console.error('❌ Food log listener failed:', err);
+    let hint = '';
+    if (err.message.includes('permissions') || err.message.includes('PERMISSION_DENIED')) {
+      hint = ' (สิทธิ์ไม่ถูกต้อง — ลองล็อกอินใหม่)';
+    }
     document.getElementById('mealSections').innerHTML =
-      `<div class="text-center text-red-400 py-8 font-bold text-sm">กรุณาเข้าสู่ระบบใหม่อีกครั้ง</div>`;
-  } else {
-    const q = query(collection(db, 'foodLogs'), where('uid', '==', uid), where('date', '==', today));
-    onSnapshot(q, snap => {
-      const entries = snap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-      latestTodayEntries = entries;
-      renderMeals(entries);
-      updateSummary(entries);
-    }, err => {
-      console.error('Food log listener failed:', err);
-      document.getElementById('mealSections').innerHTML =
-        `<div class="text-center text-red-400 py-8 font-bold text-sm">โหลดประวัติอาหารไม่สำเร็จ: ${err.message}</div>`;
-    });
-  }
+      `<div class="text-center py-8">
+        <p class="text-4xl mb-3">⚠️</p>
+        <p class="text-red-400 font-bold text-sm">โหลดประวัติอาหารไม่สำเร็จ${hint}</p>
+        <p class="text-gray-300 text-xs mt-1">${err.message}</p>
+        <button onclick="location.href='/login.html'" class="mt-4 bg-teal-500 text-white font-bold px-6 py-2 rounded-xl text-sm">
+          เข้าสู่ระบบใหม่
+        </button>
+      </div>`;
+  });
 
-function updateSummary(entries) {
-  const total = entries.reduce((s, e) => s + (e.calories || 0), 0);
-  document.getElementById('todayCalories').textContent = total.toLocaleString();
-  const pct = Math.min(100, (total / calorieGoal) * 100);
-  document.getElementById('calorieBar').style.width = pct + '%';
+  // ──────────────────────────────────────────────────────────
+  // 📊 Calorie summary
+  // ──────────────────────────────────────────────────────────
+  function updateSummary(entries) {
+    const total = entries.reduce((s, e) => s + (e.calories || 0), 0);
+    document.getElementById('todayCalories').textContent = total.toLocaleString();
+    const pct = Math.min(100, (total / calorieGoal) * 100);
+    document.getElementById('calorieBar').style.width = pct + '%';
 
-  // 🎨 เปลี่ยนสี bar ตามระดับ
-  const bar = document.getElementById('calorieBar');
-  if (pct >= 100) {
-    bar.className = 'bg-red-400 rounded-full h-2 transition-all duration-500';
-  } else if (pct >= 85) {
-    bar.className = 'bg-orange-300 rounded-full h-2 transition-all duration-500';
-  } else if (pct >= 60) {
-    bar.className = 'bg-yellow-300 rounded-full h-2 transition-all duration-500';
-  } else {
-    bar.className = 'bg-white rounded-full h-2 transition-all duration-500';
-  }
+    const bar = document.getElementById('calorieBar');
+    if (pct >= 100) {
+      bar.className = 'bg-red-400 rounded-full h-2 transition-all duration-500';
+    } else if (pct >= 85) {
+      bar.className = 'bg-orange-300 rounded-full h-2 transition-all duration-500';
+    } else if (pct >= 60) {
+      bar.className = 'bg-yellow-300 rounded-full h-2 transition-all duration-500';
+    } else {
+      bar.className = 'bg-white rounded-full h-2 transition-all duration-500';
+    }
 
-  const alertEl = document.getElementById('calorieAlert');
-  if (total >= calorieGoal && calorieGoal > 0) {
-    alertEl.textContent = 'แคลอรี่วันนี้เต็มแล้ว';
-    alertEl.classList.remove('hidden');
-    notifyCalorieGoalReached(total);
-  } else {
-    alertEl.classList.add('hidden');
+    const alertEl = document.getElementById('calorieAlert');
+    if (total >= calorieGoal && calorieGoal > 0) {
+      alertEl.textContent = 'แคลอรี่วันนี้เต็มแล้ว';
+      alertEl.classList.remove('hidden');
+      if (!calorieNotifiedToday) {
+        calorieNotifiedToday = true;
+        notifyCalorieGoalReached(total);
+      }
+    } else {
+      alertEl.classList.add('hidden');
+    }
+    saveDailyCalorieSummary(total);
   }
-  saveDailyCalorieSummary(total);
-}
 
   async function saveDailyCalorieSummary(total) {
     try {
       await setDoc(doc(db, 'dailyCalorieSummaries', `${uid}_${today}`), {
-        uid, date: today, calories: total, goal: calorieGoal, updatedAt: new Date().toISOString()
+        uid, date: today, calories: total, goal: calorieGoal,
+        updatedAt: new Date().toISOString()
       }, { merge: true });
-    } catch (err) { console.warn('Daily summary save failed:', err); }
+    } catch (err) {
+      console.warn('⚠️ Daily summary save failed:', err.message);
+    }
   }
 
+  // ──────────────────────────────────────────────────────────
+  // 📲 LINE notification เมื่อแคลอรี่เต็ม
+  // ──────────────────────────────────────────────────────────
   async function notifyCalorieGoalReached(total) {
     const notifyRef = doc(db, 'calorieNotifications', `${uid}_${today}`);
     try {
       const notifySnap = await getDoc(notifyRef);
-      if (notifySnap.exists()) return;
-      await setDoc(notifyRef, { uid, date: today, calories: total, goal: calorieGoal, status: lineUserId ? 'pending' : 'no_line_user', createdAt: new Date().toISOString() });
+      if (notifySnap.exists()) return; // เคยส่งแล้ว
+
+      await setDoc(notifyRef, {
+        uid, date: today, calories: total, goal: calorieGoal,
+        status: lineUserId ? 'pending' : 'no_line_user',
+        createdAt: new Date().toISOString()
+      });
+
       if (!lineUserId) return;
-      const res = await fetch('/api/send-line-message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: lineUserId, text: `VitalVibe: แคลอรี่วันนี้เต็มแล้ว (${total.toLocaleString()} / ${calorieGoal.toLocaleString()} kcal)` }) });
-      await updateDoc(notifyRef, { status: res.ok ? 'sent' : 'failed', notifiedAt: new Date().toISOString() });
+
+      // ส่ง ID token ไปด้วยเพื่อให้ Cloud Function ตรวจสอบได้
+      let idToken = '';
+      try {
+        idToken = await auth.currentUser.getIdToken();
+      } catch (_) {}
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
+      const res = await fetch('/api/send-line-message', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          to: lineUserId,
+          text: `VitalVibe: แคลอรี่วันนี้เต็มแล้ว (${total.toLocaleString()} / ${calorieGoal.toLocaleString()} kcal)`
+        })
+      });
+
+      await updateDoc(notifyRef, {
+        status: res.ok ? 'sent' : 'failed',
+        notifiedAt: new Date().toISOString()
+      });
     } catch (err) {
-      console.warn('Calorie LINE notification failed:', err);
-      try { await setDoc(notifyRef, { status: 'failed', error: err.message, updatedAt: new Date().toISOString() }, { merge: true }); } catch (_) {}
+      console.warn('⚠️ Calorie LINE notification failed:', err.message);
+      try {
+        await setDoc(notifyRef, {
+          status: 'failed', error: err.message,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (_) {}
     }
   }
 
+  // ──────────────────────────────────────────────────────────
+  // 🍽️ Render meals
+  // ──────────────────────────────────────────────────────────
   function renderMeals(entries) {
     const meals = ['เช้า', 'กลางวัน', 'เย็น', 'ว่าง'];
-    const icons = { เช้า: '🌅', กลางวัน: '☀️', เย็น: '🌙', ว่าง: '🍎' };
+    const icons = { 'เช้า': '🌅', 'กลางวัน': '☀️', 'เย็น': '🌙', 'ว่าง': '🍎' };
     let html = '';
+
     meals.forEach(m => {
       const items = entries.filter(e => e.meal === m);
       if (!items.length) return;
@@ -314,31 +470,51 @@ function updateSummary(entries) {
         </div>
         <div class="space-y-2">`;
       items.forEach(e => {
+        const encName = encodeURIComponent(e.name || '');
+        const encNote = encodeURIComponent(e.note || '');
         html += `<div class="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm">
           <div class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-lg flex-shrink-0">🍽️</div>
           <div class="flex-1 min-w-0">
-            <p class="font-bold text-gray-800 text-sm truncate">${e.name}</p>
+            <p class="font-bold text-gray-800 text-sm truncate">${escapeHtml(e.name)}</p>
             <p class="text-xs text-gray-400">${e.calories || 0} kcal${e.protein ? ` · ${e.protein}g โปรตีน` : ''}</p>
             <p class="text-[11px] text-gray-300">C ${e.carbs || 0}g · F ${e.fat || 0}g · Fiber ${e.fiber || 0}g · Na ${e.sodium || 0}mg</p>
-            ${e.note ? `<p class="text-[11px] text-gray-400 truncate">${e.note}</p>` : ''}
+            ${e.note ? `<p class="text-[11px] text-gray-400 truncate">${escapeHtml(e.note)}</p>` : ''}
           </div>
-          <button onclick="editEntry('${e.id}','${encodeURIComponent(e.name || '')}',${e.calories || 0},${e.carbs || 0},${e.protein || 0},${e.fat || 0},${e.fiber || 0},${e.sodium || 0},'${encodeURIComponent(e.note || '')}')" class="text-gray-300 hover:text-teal-500 transition text-sm font-black flex-shrink-0">แก้</button>
+          <button onclick="editEntry('${e.id}','${encName}',${e.calories || 0},${e.carbs || 0},${e.protein || 0},${e.fat || 0},${e.fiber || 0},${e.sodium || 0},'${encNote}')" class="text-gray-300 hover:text-teal-500 transition text-sm font-black flex-shrink-0">แก้</button>
           <button onclick="deleteEntry('${e.id}')" class="text-gray-300 hover:text-red-400 transition text-lg flex-shrink-0">🗑</button>
         </div>`;
       });
       html += `</div></div>`;
     });
-    if (!html) html = `<div class="text-center text-gray-300 py-12">
-      <p class="text-5xl mb-3">🍽️</p>
-      <p class="font-bold text-gray-400">ยังไม่มีรายการอาหารวันนี้</p>
-      <p class="text-sm text-gray-300 mt-1">ถ่ายรูปอาหารเพื่อเริ่มบันทึก</p>
-    </div>`;
+
+    if (!html) {
+      html = `<div class="text-center text-gray-300 py-12">
+        <p class="text-5xl mb-3">🍽️</p>
+        <p class="font-bold text-gray-400">ยังไม่มีรายการอาหารวันนี้</p>
+        <p class="text-sm text-gray-300 mt-1">ถ่ายรูปอาหารเพื่อเริ่มบันทึก</p>
+      </div>`;
+    }
+
     document.getElementById('mealSections').innerHTML = html;
   }
 
+  function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // 🗑️ Delete / ✏️ Edit
+  // ──────────────────────────────────────────────────────────
   window.deleteEntry = async (id) => {
     if (!confirm('ลบรายการนี้?')) return;
-    try { await deleteDoc(doc(db, 'foodLogs', id)); } catch (err) { alert('ลบไม่สำเร็จ: ' + err.message); }
+    try {
+      await deleteDoc(doc(db, 'foodLogs', id));
+    } catch (err) {
+      alert('ลบไม่สำเร็จ: ' + err.message);
+    }
   };
 
   window.editEntry = async (id, encodedName, calories, carbs, protein, fat, fiber, sodium, encodedNote) => {
@@ -358,6 +534,7 @@ function updateSummary(entries) {
     if (sodiumInput === null) return;
     const note = prompt('หมายเหตุ', decodeURIComponent(encodedNote));
     if (note === null) return;
+
     try {
       await updateDoc(doc(db, 'foodLogs', id), {
         name: name.trim() || 'ไม่ระบุชื่อ',
@@ -367,12 +544,17 @@ function updateSummary(entries) {
         fat: Math.max(0, parseInt(fatInput) || 0),
         fiber: Math.max(0, parseInt(fiberInput) || 0),
         sodium: Math.max(0, parseInt(sodiumInput) || 0),
-        note: note.trim(), updatedAt: new Date().toISOString()
+        note: note.trim(),
+        updatedAt: new Date().toISOString()
       });
-    } catch (err) { alert('แก้ไขไม่สำเร็จ: ' + err.message); }
+    } catch (err) {
+      alert('แก้ไขไม่สำเร็จ: ' + err.message);
+    }
   };
 
-  // Camera modal
+  // ──────────────────────────────────────────────────────────
+  // 📷 Camera Modal
+  // ──────────────────────────────────────────────────────────
   window.openCamera = () => {
     document.getElementById('cameraModal').classList.remove('hidden');
     document.getElementById('previewImg').classList.add('hidden');
@@ -381,9 +563,13 @@ function updateSummary(entries) {
     document.getElementById('analyzeStatus').classList.add('hidden');
     document.getElementById('analyzeBtn').disabled = true;
     document.getElementById('saveBtn').classList.add('hidden');
-    selectedFile = null; selectedB64 = null;
+    selectedFile = null;
+    selectedB64 = null;
   };
-  window.closeCameraModal = () => document.getElementById('cameraModal').classList.add('hidden');
+
+  window.closeCameraModal = () => {
+    document.getElementById('cameraModal').classList.add('hidden');
+  };
 
   window.selectMeal = (btn) => {
     selectedMeal = btn.dataset.meal;
@@ -394,6 +580,9 @@ function updateSummary(entries) {
     });
   };
 
+  // ──────────────────────────────────────────────────────────
+  // 🖼️ File selection + resize
+  // ──────────────────────────────────────────────────────────
   window.onFileSelected = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -409,11 +598,16 @@ function updateSummary(entries) {
       document.getElementById('saveBtn').classList.add('hidden');
     }).catch(err => {
       alert('อ่านรูปไม่สำเร็จ: ' + err.message);
-      selectedFile = null; selectedB64 = null;
+      selectedFile = null;
+      selectedB64 = null;
     });
   };
 
-  function resizeImage(file, maxSize = 1280, quality = 0.82) {
+  /**
+   * ปรับขนาดรูป + จำกัดขนาด base64 ไม่เกิน ~500KB
+   * เพื่อป้องกัน 400 Bad Request จาก Gemini API
+   */
+  function resizeImage(file, maxSize = 1024, quality = 0.7) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onerror = () => reject(new Error('Cannot read file'));
@@ -426,7 +620,27 @@ function updateSummary(entries) {
           canvas.width = Math.max(1, Math.round(img.width * scale));
           canvas.height = Math.max(1, Math.round(img.height * scale));
           canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', quality));
+
+          let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+          // ถ้ายังใหญ่เกิน 700KB (base64 string length) ให้ลด quality ทีละน้อย
+          if (dataUrl.length > 700_000) {
+            dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+          }
+          if (dataUrl.length > 700_000) {
+            dataUrl = canvas.toDataURL('image/jpeg', 0.3);
+          }
+          if (dataUrl.length > 700_000) {
+            // สุดท้าย: ลดขนาดพิกเซลล์ลงอีก
+            const scale2 = Math.min(1, 768 / Math.max(canvas.width, canvas.height));
+            const c2 = document.createElement('canvas');
+            c2.width = Math.max(1, Math.round(canvas.width * scale2));
+            c2.height = Math.max(1, Math.round(canvas.height * scale2));
+            c2.getContext('2d').drawImage(canvas, 0, 0, c2.width, c2.height);
+            dataUrl = c2.toDataURL('image/jpeg', 0.5);
+          }
+
+          resolve(dataUrl);
         };
         img.src = reader.result;
       };
@@ -434,17 +648,47 @@ function updateSummary(entries) {
     });
   }
 
+  // ──────────────────────────────────────────────────────────
+  // 🔍 Analyze food (Gemini)
+  // ──────────────────────────────────────────────────────────
   window.analyzeFood = async () => {
     if (!selectedB64) return;
+
     const btn = document.getElementById('analyzeBtn');
     const status = document.getElementById('analyzeStatus');
     btn.disabled = true;
     status.textContent = '🤖 Gemini กำลังวิเคราะห์อาหาร…';
     status.classList.remove('hidden');
+
     try {
-      const res = await fetch('/api/analyze-food', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mimeType: 'image/jpeg', image: selectedB64 }) });
+      // ส่ง ID token ไปด้วยเพื่อให้ Cloud Function ตรวจสอบสิทธิ์ได้
+      let idToken = '';
+      try {
+        idToken = await auth.currentUser.getIdToken();
+      } catch (_) {
+        console.warn('⚠️ ไม่สามารถดึง ID token ได้');
+      }
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
+      const res = await fetch('/api/analyze-food', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          mimeType: 'image/jpeg',
+          image: selectedB64
+        })
+      });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Analyze request failed');
+
+      if (!res.ok) {
+        // แยก error message ให้ชัดเจน
+        const errMsg = data.error || data.message || `HTTP ${res.status}`;
+        throw new Error(errMsg);
+      }
+
       const parsed = data.food || {};
       document.getElementById('foodName').value = parsed.name || '';
       document.getElementById('foodCalories').value = parsed.calories || '';
@@ -457,12 +701,29 @@ function updateSummary(entries) {
       document.getElementById('analyzeResult').classList.remove('hidden');
       document.getElementById('saveBtn').classList.remove('hidden');
       status.textContent = '✅ วิเคราะห์เสร็จแล้ว แก้ไขได้ก่อนบันทึก';
+
     } catch (err) {
-      status.textContent = '❌ วิเคราะห์ไม่สำเร็จ: ' + err.message;
+      console.error('❌ Analyze failed:', err);
+      let displayMsg = err.message || 'ไม่ทราบสาเหตุ';
+
+      if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+        displayMsg = 'ไม่มีอินเทอร์เน็ต กรุณาเชื่อมต่อแล้วลองอีกครั้ง';
+      } else if (err.message.includes('400') || err.message.includes('BAD_REQUEST')) {
+        displayMsg = 'รูปภาพไม่เหมาะสมหรือใหญ่เกินไป ลองถ่ายรูปใหม่';
+      } else if (err.message.includes('429') || err.message.includes('QUOTA')) {
+        displayMsg = 'วิเคราะห์เต็มจำนวนแล้ว ลองอีกสักครู่';
+      } else if (err.message.includes('401') || err.message.includes('403') || err.message.includes('permission')) {
+        displayMsg = 'สิทธิ์ไม่ถูกต้อง ลองล็อกอินใหม่';
+      }
+
+      status.textContent = '❌ วิเคราะห์ไม่สำเร็จ: ' + displayMsg;
       btn.disabled = false;
     }
   };
 
+  // ──────────────────────────────────────────────────────────
+  // 💾 Save food entry
+  // ──────────────────────────────────────────────────────────
   window.saveFoodEntry = async () => {
     const name = document.getElementById('foodName').value.trim();
     const calories = Math.max(0, parseInt(document.getElementById('foodCalories').value) || 0);
@@ -472,59 +733,139 @@ function updateSummary(entries) {
     const fiber = Math.max(0, parseInt(document.getElementById('foodFiber').value) || 0);
     const sodium = Math.max(0, parseInt(document.getElementById('foodSodium').value) || 0);
     const note = document.getElementById('foodNote').textContent.trim();
+
     if (!name) return alert('กรุณาระบุชื่ออาหาร');
+
     try {
-      await addDoc(collection(db, 'foodLogs'), { uid, name, calories, carbs, protein, fat, fiber, sodium, note, meal: selectedMeal, source: 'ai', analyzedBy: 'gemini', date: today, createdAt: new Date().toISOString() });
+      await addDoc(collection(db, 'foodLogs'), {
+        uid,
+        name,
+        calories,
+        carbs,
+        protein,
+        fat,
+        fiber,
+        sodium,
+        note,
+        meal: selectedMeal,
+        source: 'ai',
+        analyzedBy: 'gemini',
+        date: today,
+        createdAt: new Date().toISOString()
+      });
       closeCameraModal();
-    } catch (err) { alert('บันทึกอาหารไม่สำเร็จ: ' + err.message); }
+    } catch (err) {
+      alert('บันทึกอาหารไม่สำเร็จ: ' + err.message);
+    }
   };
 
+  // ──────────────────────────────────────────────────────────
+  // 🎯 Edit calorie goal
+  // ──────────────────────────────────────────────────────────
   window.editCalorieGoal = async () => {
     const next = prompt('เป้าหมายแคลอรี่ต่อวัน (kcal)', calorieGoal);
     if (next === null) return;
     const value = Math.max(1, parseInt(next) || 2000);
-    try { await updateDoc(doc(db, 'users', uid), { calorieGoal: value }); } catch (err) { alert('บันทึกเป้าหมายไม่สำเร็จ: ' + err.message); }
+    try {
+      await updateDoc(doc(db, 'users', uid), { calorieGoal: value });
+    } catch (err) {
+      alert('บันทึกเป้าหมายไม่สำเร็จ: ' + err.message);
+    }
   };
 
+  // ──────────────────────────────────────────────────────────
+  // 📅 Calorie History
+  // ──────────────────────────────────────────────────────────
   window.openCalorieHistory = async () => {
     document.getElementById('calorieHistoryModal').classList.remove('hidden');
     document.getElementById('historyDatePicker').value = today;
     await loadCalorieHistory();
   };
-  window.closeCalorieHistory = () => document.getElementById('calorieHistoryModal').classList.add('hidden');
+
+  window.closeCalorieHistory = () => {
+    document.getElementById('calorieHistoryModal').classList.add('hidden');
+  };
 
   window.loadCalorieHistory = async () => {
-    const snap = await getDocs(query(collection(db, 'foodLogs'), where('uid', '==', uid)));
-    historyEntries = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-    const byDate = new Map();
-    historyEntries.forEach(e => {
-      const date = e.date || (e.createdAt ? formatLocalDate(new Date(e.createdAt)) : today);
-      const cur = byDate.get(date) || { date, calories: 0, count: 0 };
-      cur.calories += Number(e.calories) || 0; cur.count += 1;
-      byDate.set(date, cur);
-    });
-    const days = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
-    document.getElementById('calorieHistoryDays').innerHTML = days.length
-      ? days.map(day => `<button onclick="renderHistoryDay('${day.date}')" class="w-full border border-gray-100 rounded-2xl px-3 py-2 text-left flex items-center justify-between"><span class="font-black text-gray-700 text-sm">${day.date}</span><span class="text-xs font-bold text-teal-600">${day.calories.toLocaleString()} kcal · ${day.count} รายการ</span></button>`).join('')
-      : '<p class="text-center text-gray-300 py-6 font-bold text-sm">ยังไม่มีประวัติแคลอรี่</p>';
-    renderHistoryDay(document.getElementById('historyDatePicker').value || today);
+    const daysContainer = document.getElementById('calorieHistoryDays');
+    const entriesContainer = document.getElementById('calorieHistoryEntries');
+
+    try {
+      daysContainer.innerHTML = '<p class="text-center text-gray-300 py-4 text-sm">กำลังโหลด...</p>';
+      entriesContainer.innerHTML = '';
+
+      const snap = await getDocs(
+        query(collection(db, 'foodLogs'), where('uid', '==', uid))
+      );
+
+      historyEntries = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const dateA = a.date || (a.createdAt ? formatLocalDate(new Date(a.createdAt)) : '');
+          const dateB = b.date || (b.createdAt ? formatLocalDate(new Date(b.createdAt)) : '');
+          return dateB.localeCompare(dateA) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+        });
+
+      // สรุปรายวัน
+      const byDate = new Map();
+      historyEntries.forEach(e => {
+        const date = e.date || (e.createdAt ? formatLocalDate(new Date(e.createdAt)) : today);
+        const cur = byDate.get(date) || { date, calories: 0, count: 0 };
+        cur.calories += Number(e.calories) || 0;
+        cur.count += 1;
+        byDate.set(date, cur);
+      });
+
+      const days = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
+
+      daysContainer.innerHTML = days.length
+        ? days.map(day =>
+            `<button onclick="renderHistoryDay('${day.date}')"
+              class="w-full border border-gray-100 rounded-2xl px-3 py-2 text-left flex items-center justify-between hover:bg-gray-50 transition">
+              <span class="font-black text-gray-700 text-sm">${day.date}</span>
+              <span class="text-xs font-bold text-teal-600">${day.calories.toLocaleString()} kcal · ${day.count} รายการ</span>
+            </button>`
+          ).join('')
+        : '<p class="text-center text-gray-300 py-6 font-bold text-sm">ยังไม่มีประวัติแคลอรี่</p>';
+
+      renderHistoryDay(document.getElementById('historyDatePicker').value || today);
+
+    } catch (err) {
+      console.error('❌ Load history failed:', err);
+      daysContainer.innerHTML = '';
+      entriesContainer.innerHTML =
+        `<div class="text-center py-6">
+          <p class="text-red-400 font-bold text-sm">โหลดประวัติไม่สำเร็จ</p>
+          <p class="text-gray-300 text-xs mt-1">${err.message}</p>
+        </div>`;
+    }
   };
 
   window.renderHistoryDay = (date) => {
     document.getElementById('historyDatePicker').value = date;
-    const entries = historyEntries.filter(e => (e.date || (e.createdAt ? formatLocalDate(new Date(e.createdAt)) : '')) === date);
+    const entries = historyEntries.filter(e => {
+      const eDate = e.date || (e.createdAt ? formatLocalDate(new Date(e.createdAt)) : '');
+      return eDate === date;
+    });
     const total = entries.reduce((sum, e) => sum + (Number(e.calories) || 0), 0);
-    document.getElementById('calorieHistoryEntries').innerHTML = entries.length
-      ? `<div class="font-black text-gray-700 text-sm mb-2">รวม ${total.toLocaleString()} kcal</div>` + entries.map(e => `<div class="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm"><div class="flex-1 min-w-0"><p class="font-bold text-gray-800 text-sm truncate">${e.name || 'ไม่ระบุชื่อ'}</p><p class="text-xs text-gray-400">${e.calories || 0} kcal · โปรตีน ${e.protein || 0}g · ${e.meal || '-'}</p></div><button onclick="editEntry('${e.id}','${encodeURIComponent(e.name || '')}',${e.calories || 0},${e.carbs || 0},${e.protein || 0},${e.fat || 0},${e.fiber || 0},${e.sodium || 0},'${encodeURIComponent(e.note || '')}')" class="text-teal-500 text-xs font-black">แก้</button></div>`).join('')
+    const container = document.getElementById('calorieHistoryEntries');
+
+    container.innerHTML = entries.length
+      ? `<div class="font-black text-gray-700 text-sm mb-2">รวม ${total.toLocaleString()} kcal</div>` +
+        entries.map(e => {
+          const encName = encodeURIComponent(e.name || '');
+          const encNote = encodeURIComponent(e.note || '');
+          return `<div class="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm">
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-gray-800 text-sm truncate">${escapeHtml(e.name || 'ไม่ระบุชื่อ')}</p>
+              <p class="text-xs text-gray-400">${e.calories || 0} kcal · โปรตีน ${e.protein || 0}g · ${e.meal || '-'}</p>
+            </div>
+            <button onclick="editEntry('${e.id}','${encName}',${e.calories || 0},${e.carbs || 0},${e.protein || 0},${e.fat || 0},${e.fiber || 0},${e.sodium || 0},'${encNote}')"
+              class="text-teal-500 text-xs font-black">แก้</button>
+          </div>`;
+        }).join('')
       : '<p class="text-center text-gray-300 py-6 font-bold text-sm">วันนี้ยังไม่มีรายการอาหาร</p>';
   };
-
-  function formatLocalDate(date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
 </script>
 </body>
 </html>
