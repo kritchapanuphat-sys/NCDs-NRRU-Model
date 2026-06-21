@@ -349,7 +349,14 @@
       try {
         if (!window.liff) throw new Error('LINE LIFF SDK ไม่สามารถโหลดได้');
         setStatus('กำลังเชื่อมต่อ LINE...');
-        await ensureLiffInit();
+        
+        // ── เพิ่ม timeout สำหรับ liff.init() เพื่อหลีกเลี่ยง hang ──
+        const initPromise = ensureLiffInit();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('LINE เชื่อมต่อช้า — กรุณาลองใหม่')), 8000)
+        );
+        await Promise.race([initPromise, timeoutPromise]);
+        
         if (!liff.isLoggedIn()) {
           if (liff.isInClient()) {
             liff.login({ redirectUri: window.location.href });
@@ -363,11 +370,12 @@
         const profile = await liff.getProfile();
         await continueWithLineProfile(profile);
       } catch (err) {
+        console.error('❌ startLineLogin error:', err);
         document.getElementById('statusView').classList.add('hidden');
         document.getElementById('btnLineLogin').classList.remove('hidden');
         document.getElementById('btnLineLogin').disabled = false;
-        document.getElementById('btnLineLogin').textContent = 'เข้าสู่ระบบด้วย LINE';
-        setStatus('ไม่สามารถเชื่อมต่อ LINE ได้');
+        document.getElementById('btnLineLogin').textContent = 'ลองใหม่';
+        setStatus('เชื่อมต่อ LINE ล้มเหลว');
         showMsg(err.message || 'เข้าสู่ระบบไม่สำเร็จ');
       }
     }
@@ -525,7 +533,17 @@
       }
     });
 
-    startLineLogin();
+    // ── เริ่มต้นการเข้าสู่ระบบ ──
+    // ถ้า startLineLogin() ล้มเหลว ให้ error handler ใน startLineLogin() เอาใจใจ
+    startLineLogin().catch(err => {
+      console.error('⚠️ Unhandled error in startLineLogin:', err);
+      document.getElementById('statusView').classList.add('hidden');
+      document.getElementById('btnLineLogin').classList.remove('hidden');
+      document.getElementById('btnLineLogin').disabled = false;
+      document.getElementById('btnLineLogin').textContent = 'ลองใหม่';
+      setStatus('เกิดข้อผิดพลาด');
+      showMsg('เข้าสู่ระบบล้มเหลว กรุณาลองใหม่');
+    });
   </script>
 </body>
 </html>
