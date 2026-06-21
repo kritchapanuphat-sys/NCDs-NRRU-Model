@@ -266,11 +266,12 @@
     throw new Error('No Firebase Auth user');
   }
 
+  // ✅ Sync session UID if mismatch (ทำให้เข้าใจกรณี re-authentication)
   if (firebaseUid !== sessionUid) {
-    console.error('❌ UID MISMATCH!', { sessionUid, firebaseUid });
-    if (typeof clearSession === 'function') clearSession();
-    showAuthError(`ข้อมูล session ไม่ตรงกัน (ต้องล็อกอินใหม่)`);
-    throw new Error(`UID mismatch: session=${sessionUid} auth=${firebaseUid}`);
+    console.warn('⚠️ UID MISMATCH detected — syncing session from', sessionUid, 'to', firebaseUid);
+    const { saveSession } = await import('./lib/auth.js');
+    saveSession({ ...session, uid: firebaseUid });
+    console.log('✅ Session synced to current Firebase UID');
   }
 
   // ✅ ผ่านทั้งหมด — ใช้ uid ต่อไปได้
