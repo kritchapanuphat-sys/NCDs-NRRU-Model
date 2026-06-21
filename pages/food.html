@@ -269,7 +269,7 @@
   // ✅ Sync session UID if mismatch (ทำให้เข้าใจกรณี re-authentication)
   if (firebaseUid !== sessionUid) {
     console.warn('⚠️ UID MISMATCH detected — syncing session from', sessionUid, 'to', firebaseUid);
-    const { saveSession } = await import('./lib/auth.js');
+    const { saveSession } = await import('../lib/auth.js');
     saveSession({ ...session, uid: firebaseUid });
     console.log('✅ Session synced to current Firebase UID');
   }
