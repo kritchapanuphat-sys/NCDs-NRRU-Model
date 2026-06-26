@@ -61,6 +61,14 @@ service cloud.firestore {
       allow read, write: if isLoggedIn();
     }
 
+    match /exerciseLogs/{docId} {
+      allow read, write: if isLoggedIn();
+    }
+
+    match /dailyExerciseSummaries/{docId} {
+      allow read, write: if isLoggedIn();
+    }
+
     // Public collections
     match /missions/{docId} {
       allow read: if true;

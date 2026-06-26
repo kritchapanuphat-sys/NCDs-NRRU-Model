@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>บันทึกการออกกำลังกาย</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { font-family:'Prompt',sans-serif; -webkit-tap-highlight-color:transparent; }
+    body { background:#fff7ed; }
+    .pb-safe { padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px)); }
+    .hide-scrollbar::-webkit-scrollbar{display:none} .hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .fade-in{animation:fadeIn .35s ease-out forwards}
+    html, body { height: 100%; height: 100dvh; width: 100%; }
+    body { margin: 0; padding: 0; }
+    input:focus,select:focus{outline:none;border-color:#f97316}
+
+    /* ── Responsive Nav ── */
+    :root { --sidebar-w: 220px; }
+    #desktopNav {
+      display: none;
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: var(--sidebar-w);
+      background: #fff;
+      border-right: 1px solid #e5e7eb;
+      flex-direction: column;
+      padding: 1.5rem 0.75rem;
+      z-index: 50;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+    }
+    #desktopNav .nav-brand {
+      font-size: 1.1rem; font-weight: 900; color: #f97316;
+      padding: 0 0.75rem 1.25rem; border-bottom: 1px solid #f3f4f6;
+      margin-bottom: 0.75rem;
+    }
+    #desktopNav a {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.65rem 0.75rem; border-radius: 0.875rem;
+      text-decoration: none; font-size: 0.875rem; font-weight: 700;
+      color: #6b7280; transition: background 0.15s, color 0.15s;
+      margin-bottom: 0.25rem;
+    }
+    #desktopNav a:hover { background: #fff7ed; color: #f97316; }
+    #desktopNav a.active { background: #fff7ed; color: #f97316; }
+    #desktopNav a .nav-icon { font-size: 1.2rem; flex-shrink: 0; }
+
+    @media (min-width: 1024px) {
+      #desktopNav { display: flex; }
+      #mobileNav { display: none !important; }
+      .page-root {
+        margin-left: var(--sidebar-w) !important;
+        width: calc(100% - var(--sidebar-w)) !important;
+      }
+      .scroll-area { padding-bottom: 1.5rem !important; }
+    }
+    @media (min-width: 768px) and (max-width: 1023px) {
+      body { overflow: auto !important; height: auto !important; }
+      .page-root { height: auto !important; min-height: 100dvh; }
+      .scroll-area { padding-bottom: 5rem !important; }
+    }
+
+    /* Category pill scroll */
+    .cat-scroll::-webkit-scrollbar{display:none}
+    .cat-scroll{-ms-overflow-style:none;scrollbar-width:none}
+
+    /* MET badge pulse */
+    @keyframes metPulse{0%,100%{opacity:1}50%{opacity:0.5}}
+    .met-badge{animation:metPulse 2s ease-in-out infinite}
+  </style>
+</head>
+<body class="h-screen w-screen overflow-hidden">
+
+<!-- ── Loading Overlay ── -->
+<div id="loadingOverlay" class="fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center">
+  <div class="w-10 h-10 border-4 border-orange-100 border-t-orange-500 rounded-full spinner mb-3"></div>
+  <p class="text-gray-400 font-bold text-sm" id="loadingText">กำลังตรวจสอบสิทธิ์...</p>
+</div>
+
+<!-- ── Auth Error View ── -->
+<div id="authErrorView" class="hidden fixed inset-0 bg-white z-[100] flex flex-col items-center justify-center p-6">
+  <p class="text-5xl mb-4">🔒</p>
+  <p class="text-gray-700 font-black text-lg text-center mb-2">กรุณาเข้าสู่ระบบใหม่</p>
+  <p class="text-gray-400 text-sm text-center mb-6" id="authErrorReason"></p>
+  <button onclick="location.href='/login.html'" class="bg-orange-500 text-white font-black px-8 py-3 rounded-2xl text-sm active:scale-95 transition">
+    เข้าสู่ระบบ
+  </button>
+</div>
+
+<div id="app" class="hidden page-root h-dvh w-screen sm:w-full sm:max-w-none bg-white relative flex flex-col">
+  <!-- Responsive container wrapper -->
+  <div class="flex-1 flex flex-col w-full max-w-full overflow-hidden">
+
+    <!-- Header -->
+    <div class="flex-shrink-0 pt-8 sm:pt-6 pb-4 px-5 bg-white border-b border-gray-100 sm:border-b-2">
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <h1 class="text-xl sm:text-2xl font-black text-gray-900 truncate">🏃‍♂️ บันทึกการออกกำลังกาย</h1>
+        </div>
+        <div id="userAvatar" class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-xl cursor-pointer flex-shrink-0"></div>
+      </div>
+
+      <!-- Today's exercise calorie summary -->
+      <div class="mt-4 bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-4 text-white relative overflow-hidden">
+        <div class="absolute top-3 right-3 flex gap-1">
+          <button onclick="openExerciseHistory()" class="bg-white/20 hover:bg-white/30 rounded-full px-2 py-1 text-[10px] font-black">📅 ประวัติ</button>
+        </div>
+        <div class="flex justify-between items-end mb-2">
+          <div>
+            <p class="text-xs font-bold opacity-75 uppercase tracking-wider">🔥 แคลอรี่ที่เผาผลาญวันนี้</p>
+            <p class="text-3xl font-black" id="todayExerciseCalories">0</p>
+          </div>
+          <div class="text-right">
+            <p class="text-lg font-bold" id="todayExerciseDuration">0 นาที</p>
+          </div>
+        </div>
+        <div class="w-full bg-white/30 rounded-full h-2">
+          <div id="exerciseCalorieBar" class="bg-white rounded-full h-2 transition-all duration-500" style="width:0%"></div>
+        </div>
+        <p class="text-xs font-bold opacity-75 mt-1" id="exerciseCalorieTargetText">เป้าหมาย: 300 kcal</p>
+      </div>
+    </div>
+
+    <!-- Scroll area -->
+    <div class="scroll-area flex-1 overflow-y-auto hide-scrollbar px-5 pt-5 pb-20 lg:pb-4">
+
+      <!-- Selector row: Category pills -->
+      <div class="mb-4">
+        <p class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">📂 หมวดหมู่</p>
+        <div id="categoryPills" class="flex gap-2 overflow-x-auto cat-scroll pb-1">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- Sub-activity grid -->
+      <div class="mb-4">
+        <p class="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">🏋️ เลือกกิจกรรม</p>
+        <div id="subActivityGrid" class="grid grid-cols-2 gap-2">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- Duration + Weight + Calculate -->
+      <div id="calcSection" class="bg-white border border-gray-100 rounded-3xl p-4 shadow-sm mb-5 hidden">
+        <h3 class="font-black text-gray-800 mb-3">⏱️ ระยะเวลา & น้ำหนัก</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-gray-400 font-bold uppercase">ระยะเวลา (นาที)</label>
+            <input id="inputDuration" type="number" value="30" min="1" max="600" step="1"
+              class="mt-1 w-full border border-gray-200 rounded-2xl px-4 py-2.5 text-sm font-bold transition-colors focus:border-orange-400"
+              oninput="calculateCalories()">
+          </div>
+          <div>
+            <label class="text-xs text-gray-400 font-bold uppercase">น้ำหนัก (kg)</label>
+            <input id="inputWeight" type="number" min="20" max="300" step="0.1"
+              class="mt-1 w-full border border-gray-200 rounded-2xl px-4 py-2.5 text-sm font-bold transition-colors focus:border-orange-400"
+              oninput="calculateCalories()">
+          </div>
+        </div>
+
+        <!-- Result card -->
+        <div id="calcResult" class="mt-4 bg-gradient-to-r from-orange-400 to-amber-400 rounded-2xl p-4 text-white hidden">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-bold opacity-75">🔥 แคลอรี่ที่เผาผลาญ</p>
+              <p class="text-3xl font-black" id="calcCalories">0</p>
+            </div>
+            <div class="text-right">
+              <p class="text-xs font-bold opacity-75">MET</p>
+              <p class="text-xl font-black" id="calcMet">0.0</p>
+            </div>
+          </div>
+          <p class="text-xs font-bold opacity-75 mt-1" id="calcDetail">–</p>
+        </div>
+
+        <button id="saveExerciseBtn" onclick="saveExerciseEntry()" disabled
+          class="mt-4 w-full bg-gradient-to-r from-orange-400 to-amber-500 text-white font-black py-3 rounded-2xl text-sm active:scale-95 transition shadow-md disabled:opacity-40">
+          💾 บันทึก
+        </button>
+      </div>
+
+      <!-- Today's exercise entries -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-black text-gray-700">📋 รายการออกกำลังกายวันนี้</h3>
+          <span id="todayEntryCount" class="text-xs font-bold text-gray-400 bg-gray-100 px-3 py-1 rounded-full">0 รายการ</span>
+        </div>
+        <div id="exerciseEntriesList" class="space-y-2">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Desktop Sidebar Nav -->
+<nav id="desktopNav">
+  <div class="nav-brand">💚 VitalVibe</div>
+  <a href="food.html"><span class="nav-icon">🍱</span>บันทึกอาหาร</a>
+  <a href="exercise.html" class="active"><span class="nav-icon">🏃</span>ออกกำลังกาย</a>
+  <a href="health.html"><span class="nav-icon">📋</span>สุขภาพ</a>
+  <a href="reminders.html"><span class="nav-icon">⏰</span>แจ้งเตือน</a>
+  <a href="missions.html"><span class="nav-icon">🏆</span>ภารกิจ</a>
+  <a href="profile.html"><span class="nav-icon">👤</span>โปรไฟล์</a>
+</nav>
+
+<!-- Bottom Nav (mobile + tablet) -->
+<nav id="mobileNav" class="fixed bottom-0 left-0 right-0 lg:hidden bg-white/95 backdrop-blur border-t border-gray-100 flex items-center justify-around pb-safe z-50 shadow-2xl" style="min-height:calc(3.5rem + max(0.5rem, env(safe-area-inset-bottom, 0px)))">
+  <a href="food.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-gray-400 flex-1 justify-center"><span class="text-xl">🍱</span><span class="text-[10px] font-bold">อาหาร</span></a>
+  <a href="exercise.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-orange-500 flex-1 justify-center"><span class="text-xl">🏃</span><span class="text-[10px] font-bold">ออกกำลัง</span></a>
+  <a href="health.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-gray-400 flex-1 justify-center"><span class="text-xl">📋</span><span class="text-[10px] font-bold">สุขภาพ</span></a>
+  <a href="reminders.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-gray-400 flex-1 justify-center"><span class="text-xl">⏰</span><span class="text-[10px] font-bold">เตือน</span></a>
+  <a href="missions.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-gray-400 flex-1 justify-center"><span class="text-xl">🏆</span><span class="text-[10px] font-bold">ภารกิจ</span></a>
+  <a href="profile.html" class="flex flex-col items-center py-2 px-2 gap-0.5 text-gray-400 flex-1 justify-center"><span class="text-xl">👤</span><span class="text-[10px] font-bold">โปรไฟล์</span></a>
+</nav>
+
+<!-- Exercise History Modal -->
+<div id="exerciseHistoryModal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+  <div class="w-full max-w-sm max-h-[88vh] bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+    <div class="bg-gradient-to-r from-orange-500 to-amber-500 p-4 flex items-center gap-3 flex-shrink-0">
+      <button onclick="closeExerciseHistory()" class="text-white/70 hover:text-white text-xl">✕</button>
+      <h2 class="text-white font-black text-lg flex-1 text-center">📅 ประวัติการออกกำลังกาย</h2>
+    </div>
+    <div class="p-4 flex-1 overflow-y-auto hide-scrollbar">
+      <div class="flex items-center gap-2 mb-3">
+        <input id="historyDatePicker" type="date" onchange="renderHistoryDay(this.value)"
+          class="flex-1 border border-gray-200 rounded-2xl px-3 py-2 text-sm font-bold">
+        <button onclick="loadExerciseHistory()" class="bg-orange-50 text-orange-600 rounded-2xl px-3 py-2 text-xs font-black">Reload</button>
+      </div>
+      <div id="exerciseHistoryDays" class="space-y-2 mb-4"></div>
+      <div id="exerciseHistoryEntries" class="space-y-2"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .spinner{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 12px); }
+</style>
+
+<script type="module">
+  // ──────────────────────────────────────────────────────────
+  // 📦 Imports
+  // ──────────────────────────────────────────────────────────
+  import { requireAuth, clearSession } from '../lib/auth.js';
+  import { db, auth } from '../lib/firebase.js';
+  import {
+    collection, addDoc, query, where,
+    onSnapshot, deleteDoc, doc, updateDoc,
+    getDocs, getDoc, setDoc
+  } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+
+  // ──────────────────────────────────────────────────────────
+  // 🔐 Auth Check
+  // ──────────────────────────────────────────────────────────
+  const loadingText = document.getElementById('loadingText');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const authErrorView = document.getElementById('authErrorView');
+  const authErrorReason = document.getElementById('authErrorReason');
+  const appEl = document.getElementById('app');
+
+  function showAuthError(reason) {
+    loadingOverlay.classList.add('hidden');
+    authErrorReason.textContent = reason;
+    authErrorView.classList.remove('hidden');
+  }
+
+  function showApp() {
+    loadingOverlay.classList.add('hidden');
+    appEl.classList.remove('hidden');
+  }
+
+  const session = requireAuth();
+  if (!session || !session.uid) {
+    showAuthError('ไม่พบข้อมูล session กรุณาเข้าสู่ระบบใหม่');
+    throw new Error('No session');
+  }
+
+  let uid;
+  let useAuth = false;
+
+  loadingText.textContent = 'กำลังตรวจสอบสิทธิ์...';
+  try {
+    if (auth.currentUser) {
+      uid = auth.currentUser.uid;
+      useAuth = true;
+    } else {
+      loadingText.textContent = 'กำลังรอการยืนยันตัวตน...';
+      const authUser = await new Promise((resolve) => {
+        const timeout = setTimeout(() => resolve(null), 5000);
+        const unsub = auth.onAuthStateChanged((user) => {
+          clearTimeout(timeout);
+          unsub();
+          resolve(user);
+        });
+      });
+      if (authUser) {
+        uid = authUser.uid;
+        useAuth = true;
+        if (uid !== session.uid) {
+          const { saveSession } = await import('../lib/auth.js');
+          saveSession({ ...session, uid });
+        }
+      } else {
+        uid = session.uid;
+        useAuth = false;
+      }
+    }
+  } catch (err) {
+    uid = session.uid;
+    useAuth = false;
+  }
+
+  if (!uid) {
+    if (typeof clearSession === 'function') clearSession();
+    showAuthError('Session หมดอายุ กรุณาเข้าสู่ระบบใหม่');
+    throw new Error('No valid UID');
+  }
+
+  showApp();
+
+  // Avatar
+  const av = session.avatar || '';
+  const avatarEl = document.getElementById('userAvatar');
+  if (av.startsWith('http') || av.startsWith('data:')) {
+    avatarEl.innerHTML = `<img src="${av}" class="w-full h-full object-cover rounded-full">`;
+  } else {
+    avatarEl.textContent = av || '🏃';
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // 📊 Exercise Category & MET Data (embedded)
+  // ──────────────────────────────────────────────────────────
+  const EXERCISE_CATEGORIES = [
+    {
+      category_id: 1,
+      category_name_th: 'คาร์ดิโอและการวิ่ง',
+      category_name_en: 'Cardio & Running',
+      icon: '🏃',
+      sub_activities: [
+        { id: 101, name_th: 'เดินปกติ / เดินเล่น', name_en: 'Walking (Leisure)', met: 3.0 },
+        { id: 102, name_th: 'เดินเร็ว', name_en: 'Brisk Walking', met: 4.3 },
+        { id: 103, name_th: 'วิ่งเหยาะๆ (Jogging)', name_en: 'Jogging', met: 7.0 },
+        { id: 104, name_th: 'วิ่งเร็วปานกลาง', name_en: 'Running (Moderate)', met: 9.8 },
+        { id: 105, name_th: 'วิ่งเร็ว / วิ่งแข่ง', name_en: 'Running (Fast/Racing)', met: 11.5 },
+        { id: 106, name_th: 'กระโดดเชือก', name_en: 'Rope Jumping', met: 11.0 }
+      ]
+    },
+    {
+      category_id: 2,
+      category_name_th: 'เวทเทรนนิ่ง บอดี้เวท และโยคะ',
+      category_name_en: 'Strength & Flexibility',
+      icon: '💪',
+      sub_activities: [
+        { id: 201, name_th: 'โยคะ / ยืดเหยียด', name_en: 'Yoga / Stretching', met: 2.5 },
+        { id: 202, name_th: 'พิลาทิส (Pilates)', name_en: 'Pilates', met: 3.0 },
+        { id: 203, name_th: 'เวทเทรนนิ่ง / บอดี้เวท (ทั่วไป)', name_en: 'Weight Training (Light/Moderate)', met: 3.5 },
+        { id: 204, name_th: 'เวทเทรนนิ่งหนัก (Heavy Lifting / Circuit)', name_en: 'Vigorous Weight Training', met: 6.0 },
+        { id: 205, name_th: 'คอสฟิต / ฮิต (HIIT / CrossFit)', name_en: 'HIIT / CrossFit', met: 8.0 }
+      ]
+    },
+    {
+      category_id: 3,
+      category_name_th: 'กีฬาประเภททีมและประเภทเดี่ยว',
+      category_name_en: 'Sports & Games',
+      icon: '⚽',
+      sub_activities: [
+        { id: 301, name_th: 'ปั่นจักรยาน (ชิลๆ / เดินทาง)', name_en: 'Cycling (Leisure)', met: 4.0 },
+        { id: 302, name_th: 'แบดมินตัน / เทเบิลเทนนิส (ทั่วไป)', name_en: 'Badminton / Ping Pong (Casual)', met: 4.5 },
+        { id: 303, name_th: 'ว่ายน้ำ (สไตล์ทั่วไป ชิลๆ)', name_en: 'Swimming (Light/Moderate)', met: 5.8 },
+        { id: 304, name_th: 'แบดมินตัน / เทนนิส (แข่งขัน/เดี่ยว)', name_en: 'Badminton / Tennis (Competitive)', met: 7.0 },
+        { id: 305, name_th: 'มวยสากล / มวยไทย (ซ้อมลงนวม)', name_en: 'Boxing / Muay Thai (Sparring)', met: 7.8 },
+        { id: 306, name_th: 'ฟุตบอล / บาสเกตบอล (แข่ง/จริงจัง)', name_en: 'Football / Basketball', met: 8.0 },
+        { id: 307, name_th: 'ปั่นจักรยาน (เร็ว / ปั่นเสือหมอบ)', name_en: 'Cycling (Fast/Racing)', met: 8.0 },
+        { id: 308, name_th: 'ว่ายน้ำ (ฟรีสไตล์ ความเร็วสูง)', name_en: 'Swimming (Fast)', met: 9.8 }
+      ]
+    }
+  ];
+
+  // ──────────────────────────────────────────────────────────
+  // 📅 State
+  // ──────────────────────────────────────────────────────────
+  let selectedCategoryId = 1;
+  let selectedSubActivity = null; // { id, name_th, name_en, met }
+  let todayEntries = [];
+  let exerciseGoal = 300; // default kcal target
+  let userWeight = 70; // default weight (kg)
+  let historyEntries = [];
+
+  function formatLocalDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const today = formatLocalDate(new Date());
+
+  // ──────────────────────────────────────────────────────────
+  // 👤 User profile listener (get weight + exerciseGoal)
+  // ──────────────────────────────────────────────────────────
+  onSnapshot(doc(db, 'users', uid), snap => {
+    const profile = snap.data() || {};
+    if (profile.initialWeight) userWeight = profile.initialWeight;
+    if (profile.exerciseGoal) exerciseGoal = profile.exerciseGoal;
+    document.getElementById('exerciseCalorieTargetText').textContent = `เป้าหมาย: ${exerciseGoal} kcal`;
+    document.getElementById('inputWeight').value = userWeight;
+    updateExerciseSummary(todayEntries);
+    if (selectedSubActivity) calculateCalories();
+  }, err => {
+    console.warn('⚠️ User profile listener error:', err.message);
+  });
+
+  // ──────────────────────────────────────────────────────────
+  // 📋 Exercise logs listener — today
+  // ──────────────────────────────────────────────────────────
+  const exerciseQuery = query(
+    collection(db, 'exerciseLogs'),
+    where('uid', '==', uid),
+    where('date', '==', today)
+  );
+
+  onSnapshot(exerciseQuery, snap => {
+    todayEntries = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    renderTodayEntries(todayEntries);
+    updateExerciseSummary(todayEntries);
+  }, err => {
+    console.error('❌ Exercise log listener failed:', err);
+    let hint = '';
+    if (err.message.includes('permissions') || err.message.includes('PERMISSION_DENIED')) {
+      hint = ' (สิทธิ์ไม่ถูกต้อง — ลองล็อกอินใหม่)';
+    }
+    document.getElementById('exerciseEntriesList').innerHTML =
+      `<div class="text-center py-8">
+        <p class="text-4xl mb-3">⚠️</p>
+        <p class="text-red-400 font-bold text-sm">โหลดข้อมูลไม่สำเร็จ${hint}</p>
+        <p class="text-gray-300 text-xs mt-1">${err.message}</p>
+      </div>`;
+  });
+
+  // ──────────────────────────────────────────────────────────
+  // 🎨 Render Categories & Sub-activities
+  // ──────────────────────────────────────────────────────────
+
+  function renderCategories() {
+    const container = document.getElementById('categoryPills');
+    container.innerHTML = EXERCISE_CATEGORIES.map(cat => `
+      <button onclick="selectCategory(${cat.category_id})"
+        class="cat-btn flex-shrink-0 px-4 py-2 rounded-full text-xs font-black transition whitespace-nowrap
+          ${cat.category_id === selectedCategoryId
+            ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}">
+        ${cat.icon} ${cat.category_name_th}
+      </button>
+    `).join('');
+  }
+
+  window.selectCategory = (catId) => {
+    selectedCategoryId = catId;
+    selectedSubActivity = null;
+    document.getElementById('calcSection').classList.add('hidden');
+    document.getElementById('saveExerciseBtn').disabled = true;
+
+    // Update pill styles
+    document.querySelectorAll('.cat-btn').forEach(btn => {
+      const idx = Array.from(btn.parentElement.children).indexOf(btn) + 1;
+      const isActive = idx === catId;
+      btn.className = `cat-btn flex-shrink-0 px-4 py-2 rounded-full text-xs font-black transition whitespace-nowrap ${
+        isActive
+          ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+      }`;
+    });
+
+    renderSubActivities(catId);
+  };
+
+  function renderSubActivities(catId) {
+    const cat = EXERCISE_CATEGORIES.find(c => c.category_id === catId);
+    if (!cat) return;
+    const container = document.getElementById('subActivityGrid');
+    container.innerHTML = cat.sub_activities.map(sa => `
+      <button onclick="selectSubActivity(${sa.id})"
+        class="sub-btn text-left p-3 rounded-2xl border-2 transition-all active:scale-[0.98] fade-in"
+        style="animation-delay:${(sa.id % 10) * 30}ms"
+        data-id="${sa.id}">
+        <p class="font-bold text-sm text-gray-800 truncate">${sa.name_th}</p>
+        <div class="flex items-center gap-2 mt-1">
+          <span class="text-[10px] font-black text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">MET ${sa.met}</span>
+          <span class="text-[10px] text-gray-400 truncate">${sa.name_en}</span>
+        </div>
+      </button>
+    `).join('');
+  }
+
+  window.selectSubActivity = (saId) => {
+    // Find sub-activity across all categories
+    let found = null;
+    for (const cat of EXERCISE_CATEGORIES) {
+      const sa = cat.sub_activities.find(s => s.id === saId);
+      if (sa) { found = { ...sa, categoryId: cat.category_id }; break; }
+    }
+    if (!found) return;
+
+    selectedSubActivity = found;
+
+    // Highlight selected
+    document.querySelectorAll('.sub-btn').forEach(btn => {
+      const id = parseInt(btn.dataset.id);
+      btn.className = id === saId
+        ? 'sub-btn text-left p-3 rounded-2xl border-2 border-orange-400 bg-orange-50 transition-all active:scale-[0.98]'
+        : 'sub-btn text-left p-3 rounded-2xl border-2 border-gray-100 bg-white hover:border-gray-200 transition-all active:scale-[0.98]';
+    });
+
+    // Show calc section
+    document.getElementById('calcSection').classList.remove('hidden');
+    document.getElementById('inputWeight').value = userWeight;
+    calculateCalories();
+  };
+
+  // ──────────────────────────────────────────────────────────
+  // 🔥 MET Calorie Calculation
+  // ──────────────────────────────────────────────────────────
+  // Formula: MET × 3.5 × (weight / 200) × duration
+  // Where:
+  //   MET = Metabolic Equivalent of Task
+  //   3.5 = mL O₂/kg/min (standard resting oxygen consumption)
+  //   weight (kg)
+  //   200 = conversion factor (mL O₂ to kcal)
+  //   duration (minutes)
+  // Result: kcal burned
+  // ──────────────────────────────────────────────────────────
+  window.calculateCalories = () => {
+    if (!selectedSubActivity) return;
+
+    const duration = parseFloat(document.getElementById('inputDuration').value) || 0;
+    const weight = parseFloat(document.getElementById('inputWeight').value) || 0;
+
+    if (duration <= 0 || weight <= 0) {
+      document.getElementById('calcResult').classList.add('hidden');
+      document.getElementById('saveExerciseBtn').disabled = true;
+      return;
+    }
+
+    const met = selectedSubActivity.met;
+    const caloriesBurned = met * 3.5 * (weight / 200) * duration;
+
+    document.getElementById('calcCalories').textContent = Math.round(caloriesBurned).toLocaleString();
+    document.getElementById('calcMet').textContent = met.toFixed(1);
+    document.getElementById('calcDetail').textContent =
+      `${selectedSubActivity.name_th} · ${duration} นาที · ${weight} kg · MET ${met}`;
+    document.getElementById('calcResult').classList.remove('hidden');
+    document.getElementById('saveExerciseBtn').disabled = false;
+  };
+
+  // ──────────────────────────────────────────────────────────
+  // 💾 Save Exercise Entry
+  // ──────────────────────────────────────────────────────────
+  window.saveExerciseEntry = async () => {
+    if (!selectedSubActivity) return;
+
+    const duration = parseFloat(document.getElementById('inputDuration').value) || 0;
+    const weight = parseFloat(document.getElementById('inputWeight').value) || 0;
+
+    if (duration <= 0) return alert('กรุณากรอกระยะเวลา');
+    if (weight <= 0) return alert('กรุณากรอกน้ำหนัก');
+
+    const met = selectedSubActivity.met;
+    const caloriesBurned = Math.round(met * 3.5 * (weight / 200) * duration);
+
+    // Find category
+    const cat = EXERCISE_CATEGORIES.find(c => c.category_id === selectedSubActivity.categoryId);
+
+    try {
+      await addDoc(collection(db, 'exerciseLogs'), {
+        uid,
+        date: today,
+        categoryId: selectedSubActivity.categoryId,
+        categoryNameTh: cat ? cat.category_name_th : '',
+        categoryNameEn: cat ? cat.category_name_en : '',
+        subActivityId: selectedSubActivity.id,
+        subActivityNameTh: selectedSubActivity.name_th,
+        subActivityNameEn: selectedSubActivity.name_en,
+        met,
+        duration,
+        weight,
+        calories: caloriesBurned,
+        createdAt: new Date().toISOString()
+      });
+
+      // Reset form
+      document.getElementById('inputDuration').value = 30;
+      selectedSubActivity = null;
+      document.getElementById('calcSection').classList.add('hidden');
+      document.getElementById('calcResult').classList.add('hidden');
+      document.getElementById('saveExerciseBtn').disabled = true;
+      document.querySelectorAll('.sub-btn').forEach(b => {
+        b.className = 'sub-btn text-left p-3 rounded-2xl border-2 border-gray-100 bg-white hover:border-gray-200 transition-all active:scale-[0.98]';
+      });
+
+    } catch (err) {
+      alert('บันทึกไม่สำเร็จ: ' + err.message);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────
+  // 📊 Summary & Rendering
+  // ──────────────────────────────────────────────────────────
+
+  function updateExerciseSummary(entries) {
+    const totalCal = entries.reduce((s, e) => s + (e.calories || 0), 0);
+    const totalMin = entries.reduce((s, e) => s + (e.duration || 0), 0);
+
+    document.getElementById('todayExerciseCalories').textContent = totalCal.toLocaleString();
+    document.getElementById('todayExerciseDuration').textContent = `${totalMin} นาที`;
+    document.getElementById('todayEntryCount').textContent = `${entries.length} รายการ`;
+
+    const pct = Math.min(100, (totalCal / exerciseGoal) * 100);
+    document.getElementById('exerciseCalorieBar').style.width = pct + '%';
+
+    const bar = document.getElementById('exerciseCalorieBar');
+    if (pct >= 100) {
+      bar.className = 'bg-green-400 rounded-full h-2 transition-all duration-500';
+    } else if (pct >= 70) {
+      bar.className = 'bg-yellow-300 rounded-full h-2 transition-all duration-500';
+    } else {
+      bar.className = 'bg-white rounded-full h-2 transition-all duration-500';
+    }
+
+    // Save daily exercise summary to Firestore
+    saveDailyExerciseSummary(totalCal, totalMin);
+  }
+
+  async function saveDailyExerciseSummary(totalCal, totalMin) {
+    try {
+      await setDoc(doc(db, 'dailyExerciseSummaries', `${uid}_${today}`), {
+        uid, date: today, calories: totalCal, duration: totalMin, goal: exerciseGoal,
+        entryCount: todayEntries.length,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn('⚠️ Daily exercise summary save failed:', err.message);
+    }
+  }
+
+  function renderTodayEntries(entries) {
+    const container = document.getElementById('exerciseEntriesList');
+
+    if (!entries.length) {
+      container.innerHTML = `<div class="text-center text-gray-300 py-8">
+        <p class="text-5xl mb-3">🏃</p>
+        <p class="font-bold text-gray-400">ยังไม่มีรายการออกกำลังกายวันนี้</p>
+        <p class="text-sm text-gray-300 mt-1">เลือกหมวดหมู่และกิจกรรมด้านบน</p>
+      </div>`;
+      return;
+    }
+
+    container.innerHTML = entries.map(e => `
+      <div class="fade-in bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-lg flex-shrink-0">🔥</div>
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-gray-800 text-sm truncate">${escapeHtml(e.subActivityNameTh || e.subActivityNameEn || 'ออกกำลังกาย')}</p>
+          <p class="text-xs text-gray-400">
+            ${e.calories.toLocaleString()} kcal · ${e.duration} นาที · MET ${e.met}
+            ${e.categoryNameTh ? `· ${e.categoryNameTh}` : ''}
+          </p>
+        </div>
+        <button onclick="deleteExerciseEntry('${e.id}')" class="text-gray-300 hover:text-red-400 transition text-lg flex-shrink-0">🗑</button>
+      </div>
+    `).join('');
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // 🗑️ Delete
+  // ──────────────────────────────────────────────────────────
+  window.deleteExerciseEntry = async (id) => {
+    if (!confirm('ลบรายการนี้?')) return;
+    try {
+      await deleteDoc(doc(db, 'exerciseLogs', id));
+    } catch (err) {
+      alert('ลบไม่สำเร็จ: ' + err.message);
+    }
+  };
+
+  // ──────────────────────────────────────────────────────────
+  // 📅 Exercise History
+  // ──────────────────────────────────────────────────────────
+  window.openExerciseHistory = async () => {
+    document.getElementById('exerciseHistoryModal').classList.remove('hidden');
+    document.getElementById('historyDatePicker').value = today;
+    await loadExerciseHistory();
+  };
+
+  window.closeExerciseHistory = () => {
+    document.getElementById('exerciseHistoryModal').classList.add('hidden');
+  };
+
+  window.loadExerciseHistory = async () => {
+    const daysContainer = document.getElementById('exerciseHistoryDays');
+    const entriesContainer = document.getElementById('exerciseHistoryEntries');
+
+    try {
+      daysContainer.innerHTML = '<p class="text-center text-gray-300 py-4 text-sm">กำลังโหลด...</p>';
+      entriesContainer.innerHTML = '';
+
+      const snap = await getDocs(
+        query(collection(db, 'exerciseLogs'), where('uid', '==', uid))
+      );
+
+      historyEntries = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const dateA = a.date || '';
+          const dateB = b.date || '';
+          return dateB.localeCompare(dateA) || String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+        });
+
+      // Daily summaries
+      const byDate = new Map();
+      historyEntries.forEach(e => {
+        const date = e.date || today;
+        const cur = byDate.get(date) || { date, calories: 0, duration: 0, count: 0 };
+        cur.calories += Number(e.calories) || 0;
+        cur.duration += Number(e.duration) || 0;
+        cur.count += 1;
+        byDate.set(date, cur);
+      });
+
+      const days = [...byDate.values()].sort((a, b) => b.date.localeCompare(a.date));
+
+      daysContainer.innerHTML = days.length
+        ? days.map(day =>
+            `<button onclick="renderHistoryDay('${day.date}')"
+              class="w-full border border-gray-100 rounded-2xl px-3 py-2 text-left flex items-center justify-between hover:bg-gray-50 transition">
+              <span class="font-black text-gray-700 text-sm">${day.date}</span>
+              <span class="text-xs font-bold text-orange-600">${day.calories.toLocaleString()} kcal · ${day.duration} นาที · ${day.count} รายการ</span>
+            </button>`
+          ).join('')
+        : '<p class="text-center text-gray-300 py-6 font-bold text-sm">ยังไม่มีประวัติการออกกำลังกาย</p>';
+
+      renderHistoryDay(document.getElementById('historyDatePicker').value || today);
+
+    } catch (err) {
+      console.error('❌ Load history failed:', err);
+      daysContainer.innerHTML = '';
+      entriesContainer.innerHTML =
+        `<div class="text-center py-6">
+          <p class="text-red-400 font-bold text-sm">โหลดประวัติไม่สำเร็จ</p>
+          <p class="text-gray-300 text-xs mt-1">${err.message}</p>
+        </div>`;
+    }
+  };
+
+  window.renderHistoryDay = (date) => {
+    document.getElementById('historyDatePicker').value = date;
+    const entries = historyEntries.filter(e => (e.date || today) === date);
+    const totalCal = entries.reduce((sum, e) => sum + (Number(e.calories) || 0), 0);
+    const totalMin = entries.reduce((sum, e) => sum + (Number(e.duration) || 0), 0);
+    const container = document.getElementById('exerciseHistoryEntries');
+
+    container.innerHTML = entries.length
+      ? `<div class="font-black text-gray-700 text-sm mb-2">🔥 รวม ${totalCal.toLocaleString()} kcal · ${totalMin} นาที</div>` +
+        entries.map(e => `
+          <div class="bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm">
+            <div class="flex-1 min-w-0">
+              <p class="font-bold text-gray-800 text-sm truncate">${escapeHtml(e.subActivityNameTh || 'ออกกำลังกาย')}</p>
+              <p class="text-xs text-gray-400">${e.calories} kcal · ${e.duration} นาที · MET ${e.met}</p>
+            </div>
+          </div>
+        `).join('')
+      : '<p class="text-center text-gray-300 py-6 font-bold text-sm">ไม่มีข้อมูลในวันนี้</p>';
+  };
+
+  // ──────────────────────────────────────────────────────────
+  // 🚀 Initialize
+  // ──────────────────────────────────────────────────────────
+  renderCategories();
+  renderSubActivities(selectedCategoryId);
+  document.getElementById('inputWeight').value = userWeight;
+
+  console.log('🏃 Exercise page initialized for UID:', uid);
+</script>
+</body>
+</html>
