@@ -30,6 +30,9 @@
       }
     ]
   },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
   "functions": {
     "source": "Functions",
     "runtime": "nodejs18"

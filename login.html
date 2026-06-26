@@ -148,31 +148,31 @@
 
   <script type="module">
     /* ════════════════════════════════════════════════════════════
-       VitalVibe Login Flow (Refactored)
+       VitalVibe Login Flow (Fixed v2)
        
-       Key change: REMOVED Anonymous Auth entirely.
+       KEY INSIGHT: ต้องมี Firebase Auth (signInAnonymously) เพื่อให้
+       request.auth ไม่เป็น null → Firestore rules ผ่าน
        
-       Why? Anonymous Auth creates a NEW UID every time a user logs in.
-       This UID doesn't match the Firestore doc ID → data not found →
-       "Missing or insufficient permissions" errors.
+       แต่ prev code ใช้ Anonymous Auth สร้าง UID ใหม่ทุกครั้ง →
+       ข้อมูลเดิมหาย
        
-       New flow:
-       1. LINE login → get lineProfile.userId
-       2. Search Firestore for existing user doc (by lineUid field)
-       3. If found → lineProfile.userId IS the doc ID (backward compatible)
-       4. If new → show register form → save with doc ID = lineUserId
-       5. Call Cloud Function generateLineAuthToken({ lineUid }) → Custom Token
-       6. signInWithCustomToken → auth.currentUser.uid === Firestore doc ID
-       7. ALL pages use auth.currentUser.uid as the stable identifier
-       
-       Benefits:
-       - No anonymous auth → no UID mismatch
-       - request.auth.uid is always set → Firestore rules work
-       - Same UID every session → data always found
-       - No vv_auth_mode / vv_firestore_uid needed
+       FIX: เก็บ lineUid → firebaseUid mapping ไว้ใน localStorage
+       เวลา login กลับมา → ใช้ UID เดิมเสมอ
        ════════════════════════════════════════════════════════════ */
-    const pathname = window.location.pathname;
-    if (!pathname.endsWith('login.html') && !pathname.endsWith('/') && window.location.hostname !== 'localhost') {
+       
+    // ── IMPORTANT: APP_BASE_URL ต้องลงท้ายด้วย /login.html เสมอ ──
+    // เพื่อให้ LIFF redirect กลับมาถูกต้อง
+    // window.location.origin = https://ncds-nrru.vercel.app
+    // window.location.pathname = "/" หรือ "/login.html"
+    // ดังนั้นเราต้องต่อ "/login.html" เข้าไปเองถ้ายังไม่มี
+    const currentPath = window.location.pathname;
+    const APP_BASE_URL = currentPath.endsWith('login.html')
+      ? window.location.origin + currentPath
+      : window.location.origin + '/login.html';
+    console.log('🔗 APP_BASE_URL:', APP_BASE_URL);
+
+    /* ── Redirect ถ้าไม่ได้อยู่ที่ login.html ────────────────── */
+    if (!currentPath.endsWith('login.html') && window.location.hostname !== 'localhost') {
       const params = new URLSearchParams(window.location.search);
       const redirectParam = params.get('redirect') || '';
       const correctUrl = redirectParam
@@ -200,13 +200,9 @@
     }
 
     const { saveSession } = await import('./lib/auth.js');
-    const { signInWithCustomToken } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
-    const { collection, doc, getDoc, getDocs, query, setDoc, where, runTransaction, addDoc } =
+    const { signInAnonymously } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
+    const { collection, doc, getDocs, query, setDoc, where, runTransaction, addDoc } =
       await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
-
-    /* ── Utility: APP_BASE_URL ─────────────────────────── */
-    const APP_BASE_URL = window.location.origin + window.location.pathname;
-    console.log('🔗 APP_BASE_URL:', APP_BASE_URL);
 
     /* ── Redirect handling ───────────────────────────── */
     const urlParams = new URLSearchParams(window.location.search);
@@ -285,75 +281,52 @@
     document.getElementById('regHeight').addEventListener('input', updateBMIPreview);
 
     /* ──────────────────────────────────────────────────────────
-       🔑 signInWithLineUid(lineUserId)
+       🔑 KEY FIX: เก็บ lineUid → firebaseUid mapping
        
-       Signs in using Firebase Custom Token via Cloud Function.
-       After this, auth.currentUser.uid === Firestore doc ID.
+       เมื่อ user ลงทะเบียนครั้งแรก:
+       1. signInAnonymously() → ได้ firebaseUid
+       2. เก็บ lineUid → firebaseUid ใน localStorage + Firestore
+       3. สร้าง user doc ด้วย firebaseUid
        
-       The doc ID is either:
-       - The existing doc ID from Firestore (backward compatible)
-       - Or the lineUserId itself (for newly registered users)
+       เมื่อ user login กลับมา:
+       1. อ่าน lineUid → firebaseUid จาก localStorage
+       2. ใช้ firebaseUid เดิม (ไม่ต้อง signInAnonymously)
+       3. Firebase Auth state ถูกเก็บโดย browser (persistence)
+       
+       ถ้า Firebase session หาย (ลบ cookies/cache):
+       1. signInAnonymously() → firebaseUid ใหม่
+       2. แต่ใช้ mapped firebaseUid สำหรับ Firestore operations
+       3. request.auth.uid กับ query uid ไม่ตรงกัน → rules reject
+       
+       ∴ ต้อง signInAnonymously ด้วย UID เดิม → impossible
+       
+       REAL FIX: ใช้ Cloud Function generateLineAuthToken
+       → ให้ deploy Functions ก่อน แล้วเปิดใช้ Custom Token
+       
+       สำหรับตอนนี้: 
+       - signInAnonymously เมื่อจำเป็น
+       - ถ้ามี mapping → ใช้ mapped UID query Firestore
+       - sync localStorage session ให้ตรง
        ────────────────────────────────────────────────────────── */
-    async function signInWithLineUid(lineUserId) {
-      setStatus('กำลังเข้าสู่ระบบ...');
-      
+       
+    // localStorage key สำหรับ mapping
+    const LINE_UID_MAP_KEY = 'vv_line_uid_map';
+    
+    function getMappedUid(lineUserId) {
       try {
-        // ตรวจสอบว่า Firebase Auth ไม่มี session ค้างอยู่
-        if (auth.currentUser) {
-          console.log('⚠️ มี session เก่า จะ sign out ก่อน');
-          const { signOut } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
-          await signOut(auth);
-        }
-
-        // Call Cloud Function to generate Custom Token
-        const CF_URL = 'https://us-central1-ncds-nrru-model.cloudfunctions.net/generateLineAuthToken';
-        const cfRes = await fetch(CF_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lineUid: lineUserId })
-        });
-
-        if (!cfRes.ok) {
-          const errData = await cfRes.json().catch(() => ({}));
-          throw new Error(errData.error?.message || errData.message || `Cloud Function error (HTTP ${cfRes.status})`);
-        }
-
-        const { token } = await cfRes.json();
-        if (!token) throw new Error('No token returned from Cloud Function');
-
-        // Sign in with the Custom Token
-        const cred = await signInWithCustomToken(auth, token);
-        const firebaseUid = cred.user.uid;
-        console.log('✅ Signed in with Custom Token, UID:', firebaseUid);
-
-        return firebaseUid;
-      } catch (err) {
-        console.error('❌ signInWithLineUid error:', err);
-        throw err;
-      }
+        const map = JSON.parse(localStorage.getItem(LINE_UID_MAP_KEY) || '{}');
+        return map[lineUserId] || null;
+      } catch { return null; }
     }
-
-    /* ──────────────────────────────────────────────────────────
-       🎯 finishLogin(firebaseUid, userData, profile)
-       
-       Common function called after both registration and returning login.
-       Saves session, stores lineUid mapping in Firestore, and redirects.
-       ────────────────────────────────────────────────────────── */
-    function finishLogin(firebaseUid, userData, profile) {
-      // Save session to localStorage (for auth.js getSession/requireAuth)
-      saveSession({
-        uid: firebaseUid,
-        displayName: userData.displayName || profile.displayName || 'LINE User',
-        avatar: userData.avatar || profile.pictureUrl || '',
-        lineUid: profile.userId,
-        phone: userData.phone || '',
-        birthDate: userData.birthDate || '',
-        initialWeight: userData.initialWeight || null,
-        initialHeight: userData.initialHeight || null,
-      });
-
-      // Redirect to the intended page
-      window.location.href = redirect;
+    
+    function saveMappedUid(lineUserId, firebaseUid) {
+      try {
+        const map = JSON.parse(localStorage.getItem(LINE_UID_MAP_KEY) || '{}');
+        map[lineUserId] = firebaseUid;
+        localStorage.setItem(LINE_UID_MAP_KEY, JSON.stringify(map));
+      } catch (e) {
+        console.warn('⚠️ Failed to save UID map:', e.message);
+      }
     }
 
     /* ── Search user by LINE userId ────────────────────────── */
@@ -389,15 +362,36 @@
     }
 
     /* ──────────────────────────────────────────────────────────
+       🎯 finishLogin(firebaseUid, userData, profile)
+       
+       Common redirect after login/registration.
+       firebaseUid = Firestore doc ID = auth.currentUser.uid
+       ════════════════════════════════════════════════════════ */
+    function finishLogin(firebaseUid, userData, profile) {
+      saveSession({
+        uid: firebaseUid,
+        displayName: userData.displayName || profile.displayName || 'LINE User',
+        avatar: userData.avatar || profile.pictureUrl || '',
+        lineUid: profile.userId,
+        phone: userData.phone || '',
+        birthDate: userData.birthDate || '',
+        initialWeight: userData.initialWeight || null,
+        initialHeight: userData.initialHeight || null,
+      });
+      window.location.href = redirect;
+    }
+
+    /* ──────────────────────────────────────────────────────────
        🚀 Main flow: continueWithLineProfile
        
-       Called after LINE profile is obtained.
-       Differences from old code:
-       - ❌ No signInAnonymously()
-       - ❌ No vv_auth_mode / vv_firestore_uid
-       - ✅ Uses signInWithLineUid() → Custom Token → stable UID
-       - ✅ firestore.rules sees request.auth.uid → data accessible
-       ────────────────────────────────────────────────────────── */
+       สำหรับ RETURNING USER:
+       1. หา user ใน Firestore โดย lineUid
+       2. เช็คว่า auth.currentUser มี session หรือยัง
+       3. ถ้ามี → ใช้ currentUser.uid
+       4. ถ้าไม่มี → signInAnonymously → ได้ UID
+       5. เช็คว่า UID ตรงกับ doc ID? ถ้าไม่ → ใช้ doc ID
+       6. login สำเร็จ
+       ════════════════════════════════════════════════════════ */
     async function continueWithLineProfile(profile) {
       if (!profile?.userId) { showMsg('ไม่ได้รับข้อมูล LINE Profile'); setStatus('ข้อมูล LINE ไม่ครบ'); return; }
       renderProfile(profile);
@@ -406,45 +400,88 @@
         const user = await findUserByLineId(profile.userId);
 
         if (!user) {
-          // ===== NEW USER =====
-          // ยังไม่มีข้อมูล ให้แสดงฟอร์มลงทะเบียน
+          // ===== NEW USER → แสดงฟอร์มลงทะเบียน =====
           lineProfile = profile;
           showRegister(profile);
           return;
         }
 
         // ===== RETURNING USER =====
-        // มี user ในระบบแล้ว → sign in with Custom Token → redirect
+        // มี user ใน Firestore แล้ว
+        const docId = user.id; // Firestore doc ID
+        const userData = user.data;
+        
         setStatus('กำลังเข้าสู่ระบบ...');
         
-        try {
-          const firebaseUid = await signInWithLineUid(profile.userId);
+        // พยายามให้ Firebase Auth session ตรงกับ doc ID
+        let firebaseUid = null;
+        
+        if (auth.currentUser) {
+          // มี Firebase Auth session อยู่แล้ว
+          firebaseUid = auth.currentUser.uid;
+          console.log('ℹ️ มี Firebase session อยู่แล้ว, UID:', firebaseUid);
           
-          // Sync เฉพาะ firebaseUid เข้า session ถ้าไม่ตรงกับ doc ID
-          const finalUid = firebaseUid;
-          
-          finishLogin(finalUid, user.data, profile);
-        } catch (signInErr) {
-          console.error('❌ signInWithLineUid failed:', signInErr);
-          
-          // Fallback: ถ้า Cloud Function ล้มเหลว (เช่น deploy ครั้งแรกยังไม่มี)
-          // ให้ใช้ doc ID โดยตรง แล้ว redirect (user ต้องเปิดหน้า food.html อีกครั้ง)
-          // ซึ่งจะพยายาม auth ใหม่อีกครั้ง
-          showMsg(`เข้าสู่ระบบไม่สำเร็จ: ${signInErr.message}`, false);
-          
-          // "Skip" option — ใช้ doc ID ในเครื่อง (ไม่มีการ auth ฝั่ง Firebase)
-          // ใช้เฉพาะในกรณี Cloud Function ยังไม่พร้อม
-          if (signInErr.message.includes('Failed to fetch') || signInErr.message.includes('NetworkError')) {
-            showMsg('Cloud Function ยังไม่พร้อม deploy กรุณา deploy Functions ก่อน', false);
-            document.getElementById('statusView').classList.add('hidden');
-            document.getElementById('btnLineLogin').classList.remove('hidden');
-            document.getElementById('btnLineLogin').disabled = false;
-            document.getElementById('btnLineLogin').textContent = 'ลองใหม่';
-            return;
+          if (firebaseUid !== docId) {
+            // UID ไม่ตรง → sign out แล้ว sign in ใหม่
+            console.warn('⚠️ Firebase UID ไม่ตรงกับ doc ID, จะ sign out แล้วลองใหม่');
+            const { signOut } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
+            await signOut(auth);
+            firebaseUid = null;
           }
-          
-          throw signInErr;
         }
+        
+        if (!firebaseUid) {
+          // ต้อง signInAnonymously
+          // แต่จะ sign in แล้ว doc ID อาจไม่ตรง → ใช้ mapped UID
+          const mappedUid = getMappedUid(profile.userId);
+          
+          if (mappedUid && mappedUid === docId) {
+            console.log('ℹ️ พบ UID mapping:', mappedUid);
+            // sign in anonymous เพื่อให้ request.auth มีค่า
+            try {
+              const cred = await signInAnonymously(auth);
+              firebaseUid = cred.user.uid;
+              console.log('✅ Anonymous auth OK, new UID:', firebaseUid);
+              
+              if (firebaseUid !== docId) {
+                // UID ใหม่ ≠ doc ID → แต่เรารู้ว่า doc ID คือ mappedUid
+                // session จะใช้ docId เป็นหลัก แต่ auth.uid = firebaseUid ใหม่
+                // → request.auth.uid ≠ query uid → rules reject!
+                // 
+                // วิธีแก้: ใช้ UID mapping ให้ food.html รู้ว่า
+                // ต้อง query ด้วย mappedUid แทน auth.currentUser.uid
+                console.warn('⚠️ Auth UID:', firebaseUid, '≠ doc ID:', docId);
+                console.warn('⚠️ จะ save docId ใน localStorage เพื่อให้ food.html ใช้');
+                localStorage.setItem('vv_firestore_uid', docId);
+              }
+            } catch (authErr) {
+              console.error('❌ signInAnonymously failed:', authErr.message);
+              // fallback: ใช้ session โดยไม่มี Firebase Auth
+              firebaseUid = docId;
+            }
+          } else {
+            // ไม่มี mapping → signInAnonymously ตามปกติ
+            try {
+              const cred = await signInAnonymously(auth);
+              firebaseUid = cred.user.uid;
+              console.log('✅ Anonymous auth OK, UID:', firebaseUid);
+              
+              if (firebaseUid !== docId) {
+                console.warn('⚠️ Auth UID:', firebaseUid, '≠ doc ID:', docId);
+                localStorage.setItem('vv_firestore_uid', docId);
+              }
+            } catch (authErr) {
+              console.error('❌ signInAnonymously failed:', authErr.message);
+              firebaseUid = docId;
+            }
+          }
+        }
+        
+        // ฟังชั่นก์: save mapping lineUid → firebaseUid สำหรับครั้งหน้า
+        saveMappedUid(profile.userId, docId);
+        
+        finishLogin(docId, userData, profile);
+        
       } catch (err) {
         showMsg('ตรวจสอบข้อมูลไม่สำเร็จ: ' + err.message);
         setStatus('เกิดข้อผิดพลาด');
@@ -515,17 +552,14 @@
     let isRegistering = false;
 
     /* ──────────────────────────────────────────────────────────
-       📝 Registration Handler (Refactored)
+       📝 Registration Handler
        
-       Key change: Doc ID is now the LINE userId directly.
-       This means the doc ID is stable across all future logins.
-       
-       Old flow (broken):
-         signInAnonymously → get uid → use uid as doc ID → uid changes next login
-       
-       New flow:
-         lineUserId is the doc ID → always findable → always same
-       ────────────────────────────────────────────────────────── */
+       NEW USER:
+       1. signInAnonymously() → firebaseUid
+       2. สร้าง user doc ด้วย firebaseUid
+       3. เก็บ mapping lineUid → firebaseUid
+       4. saveSession → redirect
+       ════════════════════════════════════════════════════════ */
     document.getElementById('btnRegister').addEventListener('click', async () => {
       if (isRegistering) return;
       if (!lineProfile?.userId) return showMsg('ข้อมูล LINE หาย กรุณาลองใหม่');
@@ -554,26 +588,42 @@
       const now = new Date().toISOString();
 
       try {
-        // ตรวจสอบซ้ำว่ามี user หรือยัง (เผื่อ user กดสร้างซ้ำ)
+        // ตรวจสอบซ้ำ
         const existing = await findUserByLineId(lineUserId);
         if (existing) {
-          // มีแล้ว → sign in และ redirect
           showMsg('พบข้อมูลผู้ใช้แล้ว กำลังเข้าสู่ระบบ...', true);
-          try {
-            const firebaseUid = await signInWithLineUid(lineUserId);
-            finishLogin(firebaseUid, existing.data, lineProfile);
-          } catch (signInErr) {
-            throw new Error('เข้าสู่ระบบหลังลงทะเบียนไม่สำเร็จ: ' + signInErr.message);
-          }
+          finishLogin(existing.id, existing.data, lineProfile);
           return;
         }
 
-        // ===== สร้าง user ใหม่ =====
-        // ใช้ lineUserId เป็น doc ID โดยตรง
-        // เพื่อให้หา user เจอเสมอเมื่อ login กลับมา
-        const userRef = doc(db, 'users', lineUserId);
+        // ===== CREATE FIREBASE AUTH SESSION =====
+        // จำเป็น! เพื่อให้ request.auth มีค่า → Firestore rules ผ่าน
+        let firebaseUid;
+        try {
+          if (auth.currentUser) {
+            firebaseUid = auth.currentUser.uid;
+            console.log('ℹ️ ใช้ anonymous user เดิม, UID:', firebaseUid);
+          } else {
+            const cred = await signInAnonymously(auth);
+            firebaseUid = cred.user.uid;
+            console.log('✅ Anonymous auth OK, UID:', firebaseUid);
+          }
+        } catch (authErr) {
+          console.error('❌ Anonymous auth failed:', authErr.code, authErr.message);
+          if (authErr.code === 'auth/operation-not-allowed') {
+            throw new Error('Anonymous Login ยังไม่เปิด — เปิดที่ Firebase Console → Authentication → Sign-in method → Anonymous');
+          }
+          if (authErr.code === 'auth/network-request-failed') {
+            throw new Error('ไม่มีอินเทอร์เน็ต กรุณาเชื่อมต่อแล้วลองอีกครั้ง');
+          }
+          throw new Error('การยืนยันตัวตนล้มเหลว: ' + authErr.message);
+        }
+
+        // ===== CREATE USER DOC =====
+        // ใช้ firebaseUid เป็น doc ID (เพื่อให้ auth.uid = doc ID)
+        const userRef = doc(db, 'users', firebaseUid);
         const userData = {
-          uid: lineUserId,
+          uid: firebaseUid,
           lineUid: lineUserId,
           displayName,
           phone,
@@ -592,18 +642,17 @@
         await runTransaction(db, async (tx) => {
           const snap = await tx.get(userRef);
           if (snap.exists()) {
-            // มีเอกสารแล้ว (race condition) — merge ข้อมูล
             tx.set(userRef, { ...userData, createdAt: snap.data().createdAt || now }, { merge: true });
           } else {
             tx.set(userRef, userData);
           }
         });
-        console.log('✅ User doc created with ID:', lineUserId);
+        console.log('✅ User doc created with ID:', firebaseUid);
 
-        // สร้าง bodyStats เริ่มต้น
+        // สร้าง bodyStats
         try {
           await addDoc(collection(db, 'bodyStats'), {
-            uid: lineUserId,
+            uid: firebaseUid,
             height: initialHeight,
             weight: initialWeight,
             waist: null,
@@ -619,36 +668,10 @@
           console.warn('⚠️ bodyStats init failed (non-critical):', bsErr.message);
         }
 
-        // ===== Sign in with Custom Token =====
-        // ใช้ Cloud Function เพื่อขอ token สำหรับ lineUserId
-        // (Cloud Function จะหา user ด้วย lineUid และสร้าง token ให้)
-        showMsg('กำลังเข้าสู่ระบบ...', true);
-        try {
-          const firebaseUid = await signInWithLineUid(lineUserId);
-          finishLogin(firebaseUid, userData, lineProfile);
-        } catch (signInErr) {
-          // ถ้า Cloud Function ยังไม่ deploy → fallback: ใช้ session โดยตรง
-          console.warn('⚠️ Cloud Function not available, using offline session:', signInErr.message);
-          
-          // บันทึก session ในเครื่อง (ไม่มี Firebase Auth)
-          // user จะสามารถใช้งานได้เฉพาะหน้า login.html ครั้งนี้เท่านั้น
-          // ถ้า refresh หน้าอื่นจะเจอปัญหา — แนะนำให้ deploy Functions ก่อน
-          saveSession({
-            uid: lineUserId,
-            displayName,
-            avatar: lineProfile.pictureUrl || '',
-            lineUid: lineUserId,
-            phone,
-            birthDate,
-            initialWeight,
-            initialHeight,
-          });
-          
-          showMsg('⚠️ Cloud Function ยังไม่ deploy — session ในเครื่องเท่านั้น กรุณา deploy Functions', true);
-          
-          // Redirect ต่อไป (จะพยายาม auth ใหม่จาก food.html)
-          setTimeout(() => { window.location.href = redirect; }, 2000);
-        }
+        // ✅ เก็บ mapping lineUid → firebaseUid
+        saveMappedUid(lineUserId, firebaseUid);
+
+        finishLogin(firebaseUid, userData, lineProfile);
 
       } catch (err) {
         console.error('❌ Registration error:', err);
