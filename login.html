@@ -199,7 +199,7 @@
       throw new Error('LIFF_IDS.login missing');
     }
 
-    const { saveSession } = await import('./lib/auth.js');
+    const { saveSession, saveFirestoreUid, getFirestoreUid } = await import('./lib/auth.js');
     const { signInAnonymously } = await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js');
     const { collection, doc, getDocs, query, setDoc, where, runTransaction, addDoc } =
       await import('https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js');
@@ -378,6 +378,11 @@
         initialWeight: userData.initialWeight || null,
         initialHeight: userData.initialHeight || null,
       });
+      // ✅ KEY FIX: Store the authoritative Firestore UID separately
+      // so ALL pages always use the correct UID for queries,
+      // regardless of what auth.currentUser.uid says.
+      saveFirestoreUid(firebaseUid);
+      console.log('✅ Authoritative Firestore UID saved:', firebaseUid);
       window.location.href = redirect;
     }
 
